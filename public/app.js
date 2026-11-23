@@ -25,6 +25,16 @@ function renderMessage(message) {
   if (seen.has(message.id)) return;
   seen.add(message.id);
 
+  if (message.system) {
+    const note = document.createElement('div');
+    note.className = 'msg system';
+    note.textContent = message.text;
+    const atBottom = messagesEl.scrollHeight - messagesEl.scrollTop - messagesEl.clientHeight < 120;
+    messagesEl.appendChild(note);
+    if (atBottom) messagesEl.scrollTop = messagesEl.scrollHeight;
+    return;
+  }
+
   const mine = message.user === username;
   const wrapper = document.createElement('div');
   wrapper.className = 'msg ' + (mine ? 'mine' : 'other');
@@ -59,10 +69,14 @@ async function loadHistory() {
 }
 
 function connectEvents() {
-  const source = new EventSource('/api/events');
+  const source = new EventSource('/api/events?user=' + encodeURIComponent(username));
   source.onopen = () => { statusEl.textContent = 'en línea'; };
   source.onerror = () => { statusEl.textContent = 'reconectando...'; };
   source.onmessage = event => renderMessage(JSON.parse(event.data));
+  source.addEventListener('presence', event => {
+    const count = JSON.parse(event.data).online;
+    statusEl.textContent = count + (count === 1 ? ' persona en línea' : ' personas en línea');
+  });
 }
 
 async function enterChat() {
