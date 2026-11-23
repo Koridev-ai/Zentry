@@ -5,8 +5,12 @@ const msgInput = document.getElementById('msgInput');
 const messagesEl = document.getElementById('messages');
 const statusEl = document.getElementById('status');
 const loginError = document.getElementById('loginError');
-const googleBtn = document.getElementById('googleBtn');
-const inviteBtn = document.getElementById('inviteBtn');
+const loginForm = document.getElementById('loginForm');
+const loginSubtitle = document.getElementById('loginSubtitle');
+const loginSubmit = document.getElementById('loginSubmit');
+const loginToggle = document.getElementById('loginToggle');
+const usernameInput = document.getElementById('usernameInput');
+const passwordInput = document.getElementById('passwordInput');
 const toastEl = document.getElementById('toast');
 const avatarBtn = document.getElementById('avatarBtn');
 const avatarImg = document.getElementById('avatarImg');
@@ -27,19 +31,12 @@ const MEMBERS_PREVIEW = 7;
 const seen = new Set();
 let members = [];
 let showAllMembers = false;
-let googleReady = false;
 let me = null;
+let registerMode = false;
 let token = localStorage.getItem('chat_token') || '';
 
-const urlInvite = new URLSearchParams(location.search).get('invite');
-if (urlInvite) {
-  localStorage.setItem('chat_invite', urlInvite);
-  window.history.replaceState(null, '', location.pathname);
-}
-let invite = localStorage.getItem('chat_invite') || '';
-
 function authQuery() {
-  return 'invite=' + encodeURIComponent(invite) + '&token=' + encodeURIComponent(token);
+  return 'token=' + encodeURIComponent(token);
 }
 
 function colorFor(key) {
@@ -183,98 +180,25 @@ function showToast(text) {
   setTimeout(() => toastEl.classList.add('hidden'), 2000);
 }
 
-async function copyText(text) {
-  try {
-    await navigator.clipboard.writeText(text);
-    return true;
-  } catch {
-    const area = document.createElement('textarea');
-    area.value = text;
-    area.style.position = 'fixed';
-    area.style.opacity = '0';
-    document.body.appendChild(area);
-    area.select();
-    const ok = document.execCommand('copy');
-    area.remove();
-    return ok;
-  }
-}
-
-async function buildInviteLink() {
-  const response = await fetch('/api/invite?' + authQuery());
-  const info = await response.json();
-  const local = ['localhost', '127.0.0.1'].includes(location.hostname);
-  const base = local && info.urls.length ? info.urls[0] : location.origin;
-  return base + '/?invite=' + encodeURIComponent(info.code);
-}
-
 function clearSession() {
   token = '';
   me = null;
   localStorage.removeItem('chat_token');
 }
 
-function waitForGoogle() {
-  return new Promise(resolve => {
-    let tries = 0;
-    const check = () => {
-      if (window.google && window.google.accounts && window.google.accounts.id) return resolve(true);
-      tries += 1;
-      if (tries > 50) return resolve(false);
-      setTimeout(check, 200);
-    };
-    check();
-  });
+function setMode(register) {
+  registerMode = register;
+  loginSubtitle.textContent = register ? 'Crea tu cuenta para entrar' : 'Inicia sesión para entrar';
+  loginSubmit.textContent = register ? 'Crear cuenta' : 'Entrar';
+  loginToggle.textContent = register ? '¿Ya tienes cuenta? Entrar' : '¿No tienes cuenta? Crear una';
+  passwordInput.autocomplete = register ? 'new-password' : 'current-password';
+  loginError.classList.add('hidden');
 }
 
-async function onGoogleCredential(result) {
-  try {
-    const response = await fetch('/api/login', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ credential: result.credential, invite })
-    });
-    const data = await response.json().catch(() => ({}));
-    if (!response.ok) {
-      if (data.error === 'invite') showLoginError('El enlace de invitación no es válido');
-      else if (data.error === 'config') showLoginError('El servidor no tiene configurado Google');
-      else showLoginError('No se pudo verificar tu cuenta de Google');
-      return;
-    }
-    token = data.token;
-    localStorage.setItem('chat_token', token);
-    loginError.classList.add('hidden');
-    enterChat();
-  } catch {
-    showLoginError('No se pudo iniciar sesión');
-  }
-}
-
-async function showLogin() {
+function showLogin() {
   loginEl.classList.remove('hidden');
   chatEl.classList.add('hidden');
-  if (googleReady) return;
-  let clientId = '';
-  try {
-    clientId = (await (await fetch('/api/config')).json()).googleClientId;
-  } catch {}
-  if (!clientId) {
-    showLoginError('El servidor no tiene configurado Google');
-    return;
-  }
-  if (!(await waitForGoogle())) {
-    showLoginError('No se pudo cargar el inicio de sesión de Google');
-    return;
-  }
-  window.google.accounts.id.initialize({ client_id: clientId, callback: onGoogleCredential });
-  window.google.accounts.id.renderButton(googleBtn, {
-    theme: 'filled_black',
-    size: 'large',
-    shape: 'pill',
-    text: 'continue_with',
-    width: 280
-  });
-  googleReady = true;
+  usernameInput.focus();
 }
 
 async function enterChat() {
@@ -286,13 +210,6 @@ async function enterChat() {
     return;
   }
   if (!response.ok) {
-    const data = await response.json().catch(() => ({}));
-    if (data.error === 'invite') {
-      invite = '';
-      localStorage.removeItem('chat_invite');
-      showLoginError('El enlace de invitación no es válido');
-      return;
-    }
     clearSession();
     showLogin();
     return;
@@ -325,14 +242,6 @@ function memberRow(person, online, isMe) {
   avatar.className = 'member-avatar';
   avatar.style.background = colorFor(person.id);
   avatar.textContent = initialOf(person.name);
-  if (person.picture) {
-    const img = document.createElement('img');
-    img.referrerPolicy = 'no-referrer';
-    img.alt = '';
-    img.addEventListener('error', () => img.remove());
-    img.src = person.picture;
-    avatar.appendChild(img);
-  }
   row.appendChild(avatar);
 
   const info = document.createElement('div');
@@ -449,12 +358,6 @@ avatarInput.addEventListener('change', async () => {
   }
 });
 
-inviteBtn.addEventListener('click', async () => {
-  const link = await buildInviteLink();
-  if (await copyText(link)) showToast('Enlace de invitación copiado');
-  else window.prompt('Copia el enlace', link);
-});
-
 groupTitle.addEventListener('click', openGroupInfo);
 infoBack.addEventListener('click', closeGroupInfo);
 memberMore.addEventListener('click', () => {
@@ -489,6 +392,39 @@ sendForm.addEventListener('submit', async event => {
   msgInput.focus();
 });
 
-if (!invite) showLoginError('Necesitas un enlace de invitación para entrar');
-else if (token) enterChat();
+loginToggle.addEventListener('click', () => setMode(!registerMode));
+
+loginForm.addEventListener('submit', async event => {
+  event.preventDefault();
+  const username = usernameInput.value.trim();
+  const password = passwordInput.value;
+  if (!username || !password) return;
+  loginSubmit.disabled = true;
+  try {
+    const response = await fetch(registerMode ? '/api/register' : '/api/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password })
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      if (data.error === 'credentials') showLoginError('Usuario o contraseña incorrectos');
+      else if (data.error === 'taken') showLoginError('Ese usuario ya existe');
+      else if (data.error === 'rate') showLoginError('Demasiados intentos, espera un minuto');
+      else showLoginError('Usuario: 3 a 20 caracteres (letras, números, _ . -). Contraseña: mínimo 6');
+      return;
+    }
+    token = data.token;
+    localStorage.setItem('chat_token', token);
+    passwordInput.value = '';
+    loginError.classList.add('hidden');
+    enterChat();
+  } catch {
+    showLoginError('No se pudo iniciar sesión');
+  } finally {
+    loginSubmit.disabled = false;
+  }
+});
+
+if (token) enterChat();
 else showLogin();
