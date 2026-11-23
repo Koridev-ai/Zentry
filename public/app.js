@@ -87,6 +87,14 @@ function renderMessage(message) {
   if (nearBottom || mine) messagesEl.scrollTop = messagesEl.scrollHeight;
 }
 
+async function loadGroup() {
+  try {
+    const response = await fetch('/api/group?invite=' + encodeURIComponent(invite));
+    if (!response.ok) return;
+    setAvatar((await response.json()).avatar);
+  } catch {}
+}
+
 async function loadHistory() {
   const response = await fetch('/api/history?invite=' + encodeURIComponent(invite));
   if (!response.ok) return false;
@@ -104,6 +112,7 @@ function connectEvents() {
       const response = await fetch('/api/history?invite=' + encodeURIComponent(invite));
       if (!response.ok) return;
       (await response.json()).forEach(renderMessage);
+      loadGroup();
       statusEl.textContent = 'en línea';
     } catch {}
   };
@@ -182,6 +191,7 @@ async function enterChat() {
   }
   loginEl.classList.add('hidden');
   chatEl.classList.remove('hidden');
+  loadGroup();
   connectEvents();
   msgInput.focus();
 }
@@ -304,6 +314,16 @@ function resizeImage(file) {
   });
 }
 
+avatarImg.addEventListener('error', () => {
+  avatarImg.classList.add('hidden');
+  avatarLetter.classList.remove('hidden');
+});
+
+infoImg.addEventListener('error', () => {
+  infoImg.classList.add('hidden');
+  infoLetter.classList.remove('hidden');
+});
+
 avatarBtn.addEventListener('click', () => avatarInput.click());
 
 avatarInput.addEventListener('change', async () => {
@@ -362,3 +382,4 @@ sendForm.addEventListener('submit', async event => {
 if (!invite) showLoginError('Necesitas un enlace de invitación para entrar');
 else if (username) enterChat();
 
+    
