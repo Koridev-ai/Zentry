@@ -93,6 +93,7 @@ html, body {
 
 .topbar-info { display: flex; flex-direction: column; flex: 1; }
 .topbar-info span { font-size: 12px; color: #8696a0; }
+.topbar-info span.typing { color: #00a884; }
 
 button.avatar {
   border: none;
