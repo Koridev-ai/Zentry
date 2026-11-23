@@ -9,6 +9,8 @@ const PORT = process.env.PORT || 3000;
 const PUBLIC_DIR = path.join(__dirname, 'public');
 const MAX_HISTORY = 500;
 const INVITE_FILE = path.join(__dirname, 'invite.json');
+const AVATAR_FILE = path.join(__dirname, 'group-avatar.jpg');
+let avatarVersion = fs.existsSync(AVATAR_FILE) ? Math.floor(fs.statSync(AVATAR_FILE).mtimeMs) : 0;
 
 function loadInvite() {
   if (process.env.INVITE_CODE) return process.env.INVITE_CODE;
@@ -78,6 +80,15 @@ function broadcastPresence() {
   for (const res of clients.keys()) res.write(payload);
 }
 
+function groupPayload() {
+  return `event: group\ndata: ${JSON.stringify({ avatar: avatarVersion })}\n\n`;
+}
+
+function broadcastGroup() {
+  const payload = groupPayload();
+  for (const res of clients.keys()) res.write(payload);
+}
+
 function userConnected(user) {
   const pending = pendingLeave.get(user);
   if (pending) {
@@ -104,12 +115,12 @@ function userDisconnected(user) {
   }, LEAVE_DELAY));
 }
 
-function readBody(req) {
+function readBody(req, limit = 10000) {
   return new Promise((resolve, reject) => {
     let body = '';
     req.on('data', chunk => {
       body += chunk;
-      if (body.length > 10000) {
+      if (body.length > limit) {
         reject(new Error('too large'));
         req.destroy();
       }
@@ -158,6 +169,7 @@ const server = http.createServer(async (req, res) => {
     });
     res.write('retry: 2000\n\n');
     clients.set(res, user);
+    res.write(groupPayload());
     if (user) userConnected(user);
     req.on('close', () => {
       clients.delete(res);
@@ -176,6 +188,37 @@ const server = http.createServer(async (req, res) => {
     const params = new URL(req.url, 'http://localhost').searchParams;
     if (!validInvite(params.get('invite'))) return sendJson(res, 403, { error: 'invite' });
     return sendJson(res, 200, { code: INVITE_CODE, urls: getBaseUrls() });
+  }
+
+  if (req.method === 'GET' && req.url.split('?')[0] === '/api/group-avatar') {
+    const params = new URL(req.url, 'http://localhost').searchParams;
+    if (!validInvite(params.get('invite'))) return sendJson(res, 403, { error: 'invite' });
+    return fs.readFile(AVATAR_FILE, (err, content) => {
+      if (err) return sendJson(res, 404, { error: 'none' });
+      res.writeHead(200, { 'Content-Type': 'image/jpeg', 'Cache-Control': 'no-cache' });
+      res.end(content);
+    });
+  }
+
+  if (req.method === 'POST' && req.url.split('?')[0] === '/api/group-avatar') {
+    const params = new URL(req.url, 'http://localhost').searchParams;
+    if (!validInvite(params.get('invite'))) return sendJson(res, 403, { error: 'invite' });
+    try {
+      const data = JSON.parse(await readBody(req, 600000));
+      const user = String(data.user || '').trim().slice(0, 30);
+      const match = /^data:image\/jpeg;base64,([A-Za-z0-9+/=]+)$/.exec(String(data.image || ''));
+      if (!user || !match) return sendJson(res, 400, { error: 'invalid' });
+      const buffer = Buffer.from(match[1], 'base64');
+      const isJpeg = buffer.length > 4 && buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff;
+      if (!isJpeg) return sendJson(res, 400, { error: 'invalid' });
+      fs.writeFileSync(AVATAR_FILE, buffer);
+      avatarVersion = Date.now();
+      broadcastGroup();
+      announce(`${user} cambió la foto del grupo`);
+      return sendJson(res, 200, { avatar: avatarVersion });
+    } catch {
+      return sendJson(res, 400, { error: 'invalid' });
+    }
   }
 
   if (req.method === 'POST' && req.url === '/api/send') {
@@ -229,4 +272,4 @@ server.listen(PORT, '0.0.0.0', () => {
   for (const base of getBaseUrls()) console.log(`Invitar a otros: ${base}/?invite=${INVITE_CODE}`);
   startTunnel();
 });
-                               
+    
