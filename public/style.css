@@ -200,3 +200,114 @@ button.avatar {
   font-size: 18px;
   cursor: pointer;
 }
+
+.topbar-info.clickable { cursor: pointer; }
+
+.avatar.big {
+  width: 120px;
+  height: 120px;
+  font-size: 44px;
+  overflow: hidden;
+  margin: 0 auto 12px;
+}
+
+.info {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  max-width: 720px;
+  margin: 0 auto;
+  background: #0b141a;
+}
+
+.info-top {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  background: #202c33;
+}
+
+.info-back {
+  width: 36px;
+  height: 36px;
+  border: none;
+  background: transparent;
+  color: #e9edef;
+  font-size: 30px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.info-body { flex: 1; overflow-y: auto; padding-bottom: 24px; }
+
+.info-hero {
+  padding: 24px 16px 18px;
+  text-align: center;
+  background: #111b21;
+  margin-bottom: 8px;
+}
+
+.info-hero h2 { font-size: 22px; font-weight: 600; }
+.info-hero p { margin-top: 4px; color: #8696a0; font-size: 14px; }
+
+.info-tabs {
+  padding: 14px 16px 6px;
+  color: #e9edef;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.info-tabs span {
+  display: inline-block;
+  padding-bottom: 8px;
+  border-bottom: 3px solid #e9edef;
+}
+
+.member-list { list-style: none; }
+
+.member {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 16px;
+}
+
+.member-avatar {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #0b141a;
+  font-size: 20px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.member-info { display: flex; flex-direction: column; min-width: 0; }
+
+.member-name {
+  font-size: 17px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.member-state { font-size: 13px; color: #8696a0; }
+.member-state.on { color: #00a884; }
+
+.member-more {
+  display: block;
+  width: 100%;
+  padding: 14px 16px 14px 78px;
+  border: none;
+  background: transparent;
+  color: #e9edef;
+  font-size: 17px;
+  text-align: left;
+  cursor: pointer;
+}
