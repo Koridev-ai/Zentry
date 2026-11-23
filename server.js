@@ -211,6 +211,12 @@ const server = http.createServer(async (req, res) => {
     return sendJson(res, 200, messages);
   }
 
+  if (req.method === 'GET' && req.url.split('?')[0] === '/api/group') {
+    const params = new URL(req.url, 'http://localhost').searchParams;
+    if (!validInvite(params.get('invite'))) return sendJson(res, 403, { error: 'invite' });
+    return sendJson(res, 200, { avatar: fs.existsSync(AVATAR_FILE) ? avatarVersion : 0 });
+  }
+
   if (req.method === 'GET' && req.url.split('?')[0] === '/api/members') {
     const params = new URL(req.url, 'http://localhost').searchParams;
     if (!validInvite(params.get('invite'))) return sendJson(res, 403, { error: 'invite' });
