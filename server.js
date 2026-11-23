@@ -3,6 +3,7 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const crypto = require('crypto');
+const { spawn } = require('child_process');
 
 const PORT = process.env.PORT || 3000;
 const PUBLIC_DIR = path.join(__dirname, 'public');
@@ -26,8 +27,10 @@ function validInvite(code) {
   return typeof code === 'string' && code === INVITE_CODE;
 }
 
+let publicUrl = (process.env.PUBLIC_URL || '').replace(/\/$/, '');
+
 function getBaseUrls() {
-  if (process.env.PUBLIC_URL) return [process.env.PUBLIC_URL.replace(/\/$/, '')];
+  if (publicUrl) return [publicUrl];
   const urls = [];
   try {
     for (const list of Object.values(os.networkInterfaces())) {
@@ -200,8 +203,30 @@ setInterval(() => {
   for (const res of clients.keys()) res.write(': ping\n\n');
 }, 20000);
 
+function startTunnel() {
+  if (process.env.NO_TUNNEL || publicUrl) return;
+  const child = spawn('cloudflared', ['tunnel', '--url', `http://localhost:${PORT}`]);
+  child.on('error', () => {
+    console.log('cloudflared no está instalado, solo habrá enlace local. Instálalo con: pkg install cloudflared');
+  });
+  const onData = chunk => {
+    if (publicUrl) return;
+    const match = String(chunk).match(/https:\/\/(?!api\.)[a-z0-9-]+\.trycloudflare\.com/);
+    if (!match) return;
+    publicUrl = match[0];
+    console.log(`Enlace público para invitar: ${publicUrl}/?invite=${INVITE_CODE}`);
+  };
+  child.stdout?.on('data', onData);
+  child.stderr?.on('data', onData);
+  process.on('exit', () => child.kill());
+  process.on('SIGINT', () => process.exit());
+  process.on('SIGTERM', () => process.exit());
+}
+
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`WhatsApp Web listo en http://localhost:${PORT}`);
   console.log(`Entrar tú: http://localhost:${PORT}/?invite=${INVITE_CODE}`);
   for (const base of getBaseUrls()) console.log(`Invitar a otros: ${base}/?invite=${INVITE_CODE}`);
+  startTunnel();
 });
+                               
