@@ -1,20 +1,19 @@
 const http = require('http');
-const https = require('https');
 const fs = require('fs');
 const path = require('path');
-const os = require('os');
 const crypto = require('crypto');
+const { promisify } = require('util');
 const { spawn } = require('child_process');
+
+const scrypt = promisify(crypto.scrypt);
 
 const PORT = process.env.PORT || 3000;
 const PUBLIC_DIR = path.join(__dirname, 'public');
 const MAX_HISTORY = 500;
 const SESSION_DAYS = 60;
-const INVITE_FILE = path.join(__dirname, 'invite.json');
 const AVATAR_FILE = path.join(__dirname, 'group-avatar.jpg');
 const USERS_FILE = path.join(__dirname, 'users.json');
 const SESSIONS_FILE = path.join(__dirname, 'sessions.json');
-const GOOGLE_FILE = path.join(__dirname, 'google.json');
 let avatarVersion = fs.existsSync(AVATAR_FILE) ? Math.floor(fs.statSync(AVATAR_FILE).mtimeMs) : 0;
 
 function readJson(file, fallback) {
@@ -23,29 +22,6 @@ function readJson(file, fallback) {
   } catch {
     return fallback;
   }
-}
-
-function loadGoogleClientId() {
-  if (process.env.GOOGLE_CLIENT_ID) return process.env.GOOGLE_CLIENT_ID.trim();
-  const saved = readJson(GOOGLE_FILE, {});
-  return String(saved.clientId || '').trim();
-}
-
-const GOOGLE_CLIENT_ID = loadGoogleClientId();
-
-function loadInvite() {
-  if (process.env.INVITE_CODE) return process.env.INVITE_CODE;
-  const saved = readJson(INVITE_FILE, {}).code;
-  if (saved) return saved;
-  const code = crypto.randomBytes(5).toString('hex');
-  fs.writeFileSync(INVITE_FILE, JSON.stringify({ code }));
-  return code;
-}
-
-const INVITE_CODE = loadInvite();
-
-function validInvite(code) {
-  return typeof code === 'string' && code === INVITE_CODE;
 }
 
 const users = new Map(readJson(USERS_FILE, []).filter(item => item && item.id).map(item => [item.id, item]));
@@ -83,52 +59,47 @@ function userFromToken(token) {
 }
 
 function publicUser(user) {
-  return { id: user.id, name: user.name, picture: user.picture || '' };
+  return { id: user.id, name: user.name };
 }
 
-function verifyGoogle(credential) {
-  return new Promise((resolve, reject) => {
-    const url = 'https://oauth2.googleapis.com/tokeninfo?id_token=' + encodeURIComponent(credential);
-    const request = https.get(url, response => {
-      let body = '';
-      response.on('data', chunk => {
-        body += chunk;
-        if (body.length > 20000) request.destroy();
-      });
-      response.on('end', () => {
-        if (response.statusCode !== 200) return reject(new Error('google'));
-        try {
-          const data = JSON.parse(body);
-          const issuerOk = data.iss === 'accounts.google.com' || data.iss === 'https://accounts.google.com';
-          const expired = Number(data.exp) * 1000 < Date.now();
-          if (data.aud !== GOOGLE_CLIENT_ID || !issuerOk || expired || String(data.email_verified) !== 'true' || !data.sub) {
-            return reject(new Error('google'));
-          }
-          resolve(data);
-        } catch {
-          reject(new Error('google'));
-        }
-      });
-    });
-    request.setTimeout(8000, () => request.destroy());
-    request.on('error', () => reject(new Error('google')));
-  });
+function findByUsername(username) {
+  const key = username.toLowerCase();
+  for (const user of users.values()) {
+    if (user.username === key) return user;
+  }
+  return null;
+}
+
+async function hashPassword(password, salt) {
+  return (await scrypt(password, salt, 64)).toString('hex');
+}
+
+async function checkPassword(user, password) {
+  const expected = Buffer.from(user.hash, 'hex');
+  const actual = Buffer.from(await hashPassword(password, user.salt), 'hex');
+  return expected.length === actual.length && crypto.timingSafeEqual(expected, actual);
+}
+
+const attempts = new Map();
+
+function throttled(req) {
+  const ip = String(req.headers['cf-connecting-ip'] || req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',')[0].trim();
+  const now = Date.now();
+  const list = (attempts.get(ip) || []).filter(time => now - time < 60000);
+  list.push(now);
+  attempts.set(ip, list);
+  return list.length > 10;
+}
+
+function readCredentials(data) {
+  const username = String(data.username || '').trim();
+  const password = String(data.password || '');
+  if (!/^[A-Za-z0-9_.-]{3,20}$/.test(username)) return null;
+  if (password.length < 6 || password.length > 100) return null;
+  return { username, password };
 }
 
 let publicUrl = (process.env.PUBLIC_URL || '').replace(/\/$/, '');
-
-function getBaseUrls() {
-  if (publicUrl) return [publicUrl];
-  const urls = [];
-  try {
-    for (const list of Object.values(os.networkInterfaces())) {
-      for (const item of list || []) {
-        if (item.family === 'IPv4' && !item.internal) urls.push(`http://${item.address}:${PORT}`);
-      }
-    }
-  } catch {}
-  return urls;
-}
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -148,6 +119,7 @@ let nextId = 1;
 
 function memberList() {
   return [...users.values()]
+    .filter(user => user.hash)
     .map(user => ({ ...publicUser(user), online: online.has(user.id) }))
     .sort((a, b) => Number(b.online) - Number(a.online) || a.name.localeCompare(b.name));
 }
@@ -227,11 +199,7 @@ function sendJson(res, status, data) {
   res.end(JSON.stringify(data));
 }
 
-function authorize(res, invite, token) {
-  if (!validInvite(invite)) {
-    sendJson(res, 403, { error: 'invite' });
-    return null;
-  }
+function authorize(res, token) {
   const user = userFromToken(token);
   if (!user) {
     sendJson(res, 401, { error: 'auth' });
@@ -263,33 +231,43 @@ const server = http.createServer(async (req, res) => {
   const route = req.url.split('?')[0];
   const params = new URL(req.url, 'http://localhost').searchParams;
 
-  if (req.method === 'GET' && route === '/api/config') {
-    return sendJson(res, 200, { googleClientId: GOOGLE_CLIENT_ID });
-  }
-
-  if (req.method === 'POST' && route === '/api/login') {
+  if (req.method === 'POST' && (route === '/api/register' || route === '/api/login')) {
+    if (throttled(req)) return sendJson(res, 429, { error: 'rate' });
     try {
-      const data = JSON.parse(await readBody(req, 20000));
-      if (!validInvite(data.invite)) return sendJson(res, 403, { error: 'invite' });
-      if (!GOOGLE_CLIENT_ID) return sendJson(res, 500, { error: 'config' });
-      const profile = await verifyGoogle(String(data.credential || ''));
-      const id = String(profile.sub);
-      const name = String(profile.name || profile.given_name || String(profile.email || '').split('@')[0] || 'Usuario').trim().slice(0, 30);
-      const picture = /^https:\/\//.test(String(profile.picture || '')) ? String(profile.picture) : '';
-      const existing = users.get(id);
-      const user = { id, name, picture, joined: existing ? existing.joined : Date.now() };
-      users.set(id, user);
-      saveUsers();
-      const token = createSession(id);
+      const data = JSON.parse(await readBody(req, 5000));
+      const credentials = readCredentials(data);
+      if (!credentials) return sendJson(res, 400, { error: 'format' });
+      let user;
+      if (route === '/api/register') {
+        if (findByUsername(credentials.username)) return sendJson(res, 409, { error: 'taken' });
+        const salt = crypto.randomBytes(16).toString('hex');
+        const hash = await hashPassword(credentials.password, salt);
+        user = {
+          id: crypto.randomBytes(8).toString('hex'),
+          username: credentials.username.toLowerCase(),
+          name: credentials.username,
+          salt,
+          hash,
+          joined: Date.now()
+        };
+        users.set(user.id, user);
+        saveUsers();
+      } else {
+        user = findByUsername(credentials.username);
+        if (!user || !user.hash || !(await checkPassword(user, credentials.password))) {
+          return sendJson(res, 401, { error: 'credentials' });
+        }
+      }
+      const token = createSession(user.id);
       broadcastPresence();
       return sendJson(res, 200, { token, user: publicUser(user) });
     } catch {
-      return sendJson(res, 401, { error: 'google' });
+      return sendJson(res, 400, { error: 'invalid' });
     }
   }
 
   if (req.method === 'GET' && route === '/api/me') {
-    const user = authorize(res, params.get('invite'), params.get('token'));
+    const user = authorize(res, params.get('token'));
     if (!user) return;
     return sendJson(res, 200, { user: publicUser(user) });
   }
@@ -301,7 +279,7 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (req.method === 'GET' && route === '/api/events') {
-    const user = authorize(res, params.get('invite'), params.get('token'));
+    const user = authorize(res, params.get('token'));
     if (!user) return;
     res.writeHead(200, {
       'Content-Type': 'text/event-stream',
@@ -323,31 +301,25 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (req.method === 'GET' && route === '/api/history') {
-    const user = authorize(res, params.get('invite'), params.get('token'));
+    const user = authorize(res, params.get('token'));
     if (!user) return;
     return sendJson(res, 200, messages);
   }
 
   if (req.method === 'GET' && route === '/api/group') {
-    const user = authorize(res, params.get('invite'), params.get('token'));
+    const user = authorize(res, params.get('token'));
     if (!user) return;
     return sendJson(res, 200, { avatar: fs.existsSync(AVATAR_FILE) ? avatarVersion : 0 });
   }
 
   if (req.method === 'GET' && route === '/api/members') {
-    const user = authorize(res, params.get('invite'), params.get('token'));
+    const user = authorize(res, params.get('token'));
     if (!user) return;
     return sendJson(res, 200, { online: online.size, members: memberList() });
   }
 
-  if (req.method === 'GET' && route === '/api/invite') {
-    const user = authorize(res, params.get('invite'), params.get('token'));
-    if (!user) return;
-    return sendJson(res, 200, { code: INVITE_CODE, urls: getBaseUrls() });
-  }
-
   if (req.method === 'GET' && route === '/api/group-avatar') {
-    const user = authorize(res, params.get('invite'), params.get('token'));
+    const user = authorize(res, params.get('token'));
     if (!user) return;
     return fs.readFile(AVATAR_FILE, (err, content) => {
       if (err) return sendJson(res, 404, { error: 'none' });
@@ -357,7 +329,7 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (req.method === 'POST' && route === '/api/group-avatar') {
-    const user = authorize(res, params.get('invite'), params.get('token'));
+    const user = authorize(res, params.get('token'));
     if (!user) return;
     try {
       const data = JSON.parse(await readBody(req, 600000));
@@ -377,13 +349,13 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (req.method === 'POST' && route === '/api/send') {
-    const user = authorize(res, params.get('invite'), params.get('token'));
+    const user = authorize(res, params.get('token'));
     if (!user) return;
     try {
       const data = JSON.parse(await readBody(req));
       const text = String(data.text || '').trim().slice(0, 2000);
       if (!text) return sendJson(res, 400, { error: 'invalid' });
-      const message = { id: nextId++, uid: user.id, user: user.name, picture: user.picture || '', text, time: Date.now() };
+      const message = { id: nextId++, uid: user.id, user: user.name, text, time: Date.now() };
       pushMessage(message);
       return sendJson(res, 200, message);
     } catch {
@@ -399,6 +371,10 @@ const server = http.createServer(async (req, res) => {
 
 setInterval(() => {
   for (const res of clients.keys()) res.write(': ping\n\n');
+  const now = Date.now();
+  for (const [ip, list] of attempts) {
+    if (!list.some(time => now - time < 60000)) attempts.delete(ip);
+  }
 }, 20000);
 
 function startTunnel() {
@@ -412,8 +388,7 @@ function startTunnel() {
     const match = String(chunk).match(/https:\/\/(?!api\.)[a-z0-9-]+\.trycloudflare\.com/);
     if (!match) return;
     publicUrl = match[0];
-    console.log(`Enlace público para invitar: ${publicUrl}/?invite=${INVITE_CODE}`);
-    console.log(`Autoriza este origen en Google Cloud: ${publicUrl}`);
+    console.log(`Enlace público: ${publicUrl}`);
   };
   child.stdout?.on('data', onData);
   child.stderr?.on('data', onData);
@@ -424,8 +399,6 @@ function startTunnel() {
 
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`WhatsApp Web listo en http://localhost:${PORT}`);
-  if (!GOOGLE_CLIENT_ID) console.log('Falta GOOGLE_CLIENT_ID (variable de entorno o google.json con {"clientId":"..."})');
-  console.log(`Entrar tú: http://localhost:${PORT}/?invite=${INVITE_CODE}`);
-  for (const base of getBaseUrls()) console.log(`Invitar a otros: ${base}/?invite=${INVITE_CODE}`);
   startTunnel();
 });
+                  
