@@ -111,6 +111,18 @@ html, body {
 .msg.other { align-self: flex-start; background: #202c33; border-top-left-radius: 2px; }
 .msg.mine { align-self: flex-end; background: #005c4b; border-top-right-radius: 2px; }
 
+.msg.system {
+  align-self: center;
+  max-width: 90%;
+  margin: 6px 0;
+  padding: 5px 12px;
+  background: #182229;
+  color: #8696a0;
+  font-size: 12.5px;
+  text-align: center;
+  border-radius: 8px;
+}
+
 .msg .author { font-size: 12.5px; font-weight: 600; margin-bottom: 2px; }
 .msg .time { font-size: 11px; color: #8696a0; text-align: right; margin-top: 2px; }
 
