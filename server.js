@@ -115,7 +115,7 @@ const clients = new Map();
 const online = new Map();
 const pendingLeave = new Map();
 const LEAVE_DELAY = 5000;
-let nextId = 1;
+let nextId = Date.now();
 
 function memberList() {
   return [...users.values()]
@@ -153,6 +153,32 @@ function broadcastGroup() {
   for (const res of clients.keys()) res.write(payload);
 }
 
+const typing = new Map();
+const TYPING_TIMEOUT = 4000;
+
+function typingList() {
+  return [...typing.keys()].map(id => users.get(id)).filter(Boolean).map(publicUser);
+}
+
+function broadcastTyping() {
+  const payload = `event: typing\ndata: ${JSON.stringify(typingList())}\n\n`;
+  for (const res of clients.keys()) res.write(payload);
+}
+
+function clearTyping(id) {
+  if (!typing.has(id)) return;
+  clearTimeout(typing.get(id));
+  typing.delete(id);
+  broadcastTyping();
+}
+
+function setTyping(user) {
+  const existed = typing.has(user.id);
+  clearTimeout(typing.get(user.id));
+  typing.set(user.id, setTimeout(() => clearTyping(user.id), TYPING_TIMEOUT));
+  if (!existed) broadcastTyping();
+}
+
 function userConnected(user) {
   const pending = pendingLeave.get(user.id);
   if (pending) {
@@ -172,6 +198,7 @@ function userDisconnected(user) {
     return;
   }
   online.delete(user.id);
+  clearTyping(user.id);
   broadcastPresence();
   pendingLeave.set(user.id, setTimeout(() => {
     pendingLeave.delete(user.id);
@@ -289,6 +316,7 @@ const server = http.createServer(async (req, res) => {
       Connection: 'keep-alive'
     });
     res.flushHeaders();
+    if (req.socket) req.socket.setNoDelay(true);
     res.write(`retry: 2000\n: ${' '.repeat(2048)}\n\n`);
     clients.set(res, user.id);
     res.write(groupPayload());
@@ -303,7 +331,8 @@ const server = http.createServer(async (req, res) => {
   if (req.method === 'GET' && route === '/api/history') {
     const user = authorize(res, params.get('token'));
     if (!user) return;
-    return sendJson(res, 200, messages);
+    const after = Number(params.get('after')) || 0;
+    return sendJson(res, 200, after ? messages.filter(item => item.id > after) : messages);
   }
 
   if (req.method === 'GET' && route === '/api/group') {
@@ -315,7 +344,7 @@ const server = http.createServer(async (req, res) => {
   if (req.method === 'GET' && route === '/api/members') {
     const user = authorize(res, params.get('token'));
     if (!user) return;
-    return sendJson(res, 200, { online: online.size, members: memberList() });
+    return sendJson(res, 200, { online: online.size, members: memberList(), typing: typingList() });
   }
 
   if (req.method === 'GET' && route === '/api/group-avatar') {
@@ -348,6 +377,13 @@ const server = http.createServer(async (req, res) => {
     }
   }
 
+  if (req.method === 'POST' && route === '/api/typing') {
+    const user = authorize(res, params.get('token'));
+    if (!user) return;
+    setTyping(user);
+    return sendJson(res, 200, { ok: true });
+  }
+
   if (req.method === 'POST' && route === '/api/send') {
     const user = authorize(res, params.get('token'));
     if (!user) return;
@@ -356,6 +392,7 @@ const server = http.createServer(async (req, res) => {
       const text = String(data.text || '').trim().slice(0, 2000);
       if (!text) return sendJson(res, 400, { error: 'invalid' });
       const message = { id: nextId++, uid: user.id, user: user.name, text, time: Date.now() };
+      clearTyping(user.id);
       pushMessage(message);
       return sendJson(res, 200, message);
     } catch {
@@ -370,12 +407,12 @@ const server = http.createServer(async (req, res) => {
 });
 
 setInterval(() => {
-  for (const res of clients.keys()) res.write(': ping\n\n');
+  for (const res of clients.keys()) res.write('event: ping\ndata: 1\n\n');
   const now = Date.now();
   for (const [ip, list] of attempts) {
     if (!list.some(time => now - time < 60000)) attempts.delete(ip);
   }
-}, 20000);
+}, 15000);
 
 function startTunnel() {
   if (process.env.NO_TUNNEL || publicUrl) return;
@@ -401,4 +438,3 @@ server.listen(PORT, '0.0.0.0', () => {
   console.log(`WhatsApp Web listo en http://localhost:${PORT}`);
   startTunnel();
 });
-                  
