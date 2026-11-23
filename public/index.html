@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+  <meta name="theme-color" content="#202c33">
+  <title>Chat Web</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="login" class="login">
+    <div class="login-card">
+      <div class="logo">✦</div>
+      <h1>Chat Web</h1>
+      <p id="loginSubtitle">Inicia sesión para entrar</p>
+      <form id="loginForm">
+        <input id="usernameInput" type="text" maxlength="20" placeholder="Usuario" autocomplete="username" autocapitalize="none" spellcheck="false">
+        <input id="passwordInput" type="password" maxlength="100" placeholder="Contraseña" autocomplete="current-password">
+        <button id="loginSubmit" type="submit">Entrar</button>
+      </form>
+      <p id="loginError" class="login-error hidden"></p>
+      <button id="loginToggle" class="login-toggle" type="button">¿No tienes cuenta? Crear una</button>
+    </div>
+  </div>
+
+  <div id="chat" class="chat hidden">
+    <header class="topbar">
+      <button id="avatarBtn" class="avatar" type="button" aria-label="Cambiar foto del grupo">
+        <span id="avatarLetter">G</span>
+        <img id="avatarImg" class="hidden" alt="">
+      </button>
+      <input id="avatarInput" type="file" accept="image/*" class="hidden">
+      <div id="groupTitle" class="topbar-info clickable">
+        <strong>Grupo general</strong>
+        <span id="status">conectando...</span>
+      </div>
+    </header>
+    <main id="messages" class="messages"></main>
+    <form id="sendForm" class="composer">
+      <input id="msgInput" type="text" maxlength="2000" placeholder="Escribe un mensaje" autocomplete="off">
+      <button type="submit" aria-label="Enviar">➤</button>
+    </form>
+  </div>
+
+  <div id="groupInfo" class="info hidden">
+    <header class="info-top">
+      <button id="infoBack" class="info-back" type="button" aria-label="Volver">‹</button>
+      <strong>Info. del grupo</strong>
+    </header>
+    <div class="info-body">
+      <div class="info-hero">
+        <div class="avatar big">
+          <span id="infoLetter">G</span>
+          <img id="infoImg" class="hidden" alt="">
+        </div>
+        <h2>Grupo general</h2>
+        <p id="infoCount">0 miembros</p>
+      </div>
+      <div class="info-tabs"><span>Miembros</span></div>
+      <ul id="memberList" class="member-list"></ul>
+      <button id="memberMore" class="member-more hidden" type="button"></button>
+      <button id="logoutBtn" class="logout-btn" type="button">Cerrar sesión</button>
+    </div>
+  </div>
+
+  <div id="toast" class="toast hidden"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>
