@@ -43,6 +43,7 @@ function renderMessage(message) {
     const note = document.createElement('div');
     note.className = 'msg system';
     note.textContent = message.text;
+    if (message.text.endsWith('cambió la foto del grupo')) setAvatar(message.time);
     const atBottom = messagesEl.scrollHeight - messagesEl.scrollTop - messagesEl.clientHeight < 120;
     messagesEl.appendChild(note);
     if (atBottom) messagesEl.scrollTop = messagesEl.scrollHeight;
@@ -265,3 +266,4 @@ sendForm.addEventListener('submit', async event => {
 
 if (!invite) showLoginError('Necesitas un enlace de invitación para entrar');
 else if (username) enterChat();
+  
