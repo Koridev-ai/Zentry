@@ -16,12 +16,56 @@ const MIME = {
 };
 
 const messages = [];
-const clients = new Set();
+const clients = new Map();
+const online = new Map();
+const pendingLeave = new Map();
+const LEAVE_DELAY = 5000;
 let nextId = 1;
 
 function broadcast(message) {
   const payload = `data: ${JSON.stringify(message)}\n\n`;
-  for (const res of clients) res.write(payload);
+  for (const res of clients.keys()) res.write(payload);
+}
+
+function pushMessage(message) {
+  messages.push(message);
+  if (messages.length > MAX_HISTORY) messages.shift();
+  broadcast(message);
+}
+
+function announce(text) {
+  pushMessage({ id: nextId++, system: true, text, time: Date.now() });
+}
+
+function broadcastPresence() {
+  const payload = `event: presence\ndata: ${JSON.stringify({ online: online.size })}\n\n`;
+  for (const res of clients.keys()) res.write(payload);
+}
+
+function userConnected(user) {
+  const pending = pendingLeave.get(user);
+  if (pending) {
+    clearTimeout(pending);
+    pendingLeave.delete(user);
+  }
+  const count = online.get(user) || 0;
+  online.set(user, count + 1);
+  if (count === 0 && !pending) announce(`${user} entró al chat`);
+  broadcastPresence();
+}
+
+function userDisconnected(user) {
+  const count = (online.get(user) || 1) - 1;
+  if (count > 0) {
+    online.set(user, count);
+    return;
+  }
+  online.delete(user);
+  broadcastPresence();
+  pendingLeave.set(user, setTimeout(() => {
+    pendingLeave.delete(user);
+    announce(`${user} salió del chat`);
+  }, LEAVE_DELAY));
 }
 
 function readBody(req) {
@@ -64,15 +108,20 @@ function serveStatic(req, res) {
 }
 
 const server = http.createServer(async (req, res) => {
-  if (req.method === 'GET' && req.url === '/api/events') {
+  if (req.method === 'GET' && req.url.split('?')[0] === '/api/events') {
+    const user = (new URL(req.url, 'http://localhost').searchParams.get('user') || '').trim().slice(0, 30);
     res.writeHead(200, {
       'Content-Type': 'text/event-stream',
       'Cache-Control': 'no-cache',
       Connection: 'keep-alive'
     });
     res.write('retry: 2000\n\n');
-    clients.add(res);
-    req.on('close', () => clients.delete(res));
+    clients.set(res, user);
+    if (user) userConnected(user);
+    req.on('close', () => {
+      clients.delete(res);
+      if (user) userDisconnected(user);
+    });
     return;
   }
 
@@ -87,9 +136,7 @@ const server = http.createServer(async (req, res) => {
       const text = String(data.text || '').trim().slice(0, 2000);
       if (!user || !text) return sendJson(res, 400, { error: 'invalid' });
       const message = { id: nextId++, user, text, time: Date.now() };
-      messages.push(message);
-      if (messages.length > MAX_HISTORY) messages.shift();
-      broadcast(message);
+      pushMessage(message);
       return sendJson(res, 200, message);
     } catch {
       return sendJson(res, 400, { error: 'invalid' });
@@ -103,7 +150,7 @@ const server = http.createServer(async (req, res) => {
 });
 
 setInterval(() => {
-  for (const res of clients) res.write(': ping\n\n');
+  for (const res of clients.keys()) res.write(': ping\n\n');
 }, 20000);
 
 server.listen(PORT, '0.0.0.0', () => {
