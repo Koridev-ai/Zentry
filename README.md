@@ -1,1 +1,6 @@
-# Zentry
+```
+cd Zentry
+```
+```
+npm start
+```
