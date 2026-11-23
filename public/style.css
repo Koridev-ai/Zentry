@@ -54,6 +54,15 @@ html, body {
   cursor: pointer;
 }
 
+.login-card button.login-toggle {
+  margin-top: 14px;
+  padding: 8px;
+  background: transparent;
+  color: #53bdeb;
+  font-size: 14px;
+  font-weight: 400;
+}
+
 .chat {
   height: 100%;
   display: flex;
@@ -99,17 +108,6 @@ button.avatar {
   width: 100%;
   height: 100%;
   object-fit: cover;
-}
-
-.invite-btn {
-  padding: 8px 14px;
-  border: none;
-  border-radius: 18px;
-  background: #00a884;
-  color: #fff;
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
 }
 
 .login-error {
@@ -310,13 +308,6 @@ button.avatar {
   font-size: 17px;
   text-align: left;
   cursor: pointer;
-}
-
-.google-btn {
-  display: flex;
-  justify-content: center;
-  min-height: 44px;
-  margin-bottom: 4px;
 }
 
 .member-avatar { position: relative; overflow: hidden; }
