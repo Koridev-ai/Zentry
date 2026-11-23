@@ -191,10 +191,13 @@ const server = http.createServer(async (req, res) => {
     const user = (params.get('user') || '').trim().slice(0, 30);
     res.writeHead(200, {
       'Content-Type': 'text/event-stream',
-      'Cache-Control': 'no-cache',
+      'Cache-Control': 'no-cache, no-transform',
+      'Content-Encoding': 'identity',
+      'X-Accel-Buffering': 'no',
       Connection: 'keep-alive'
     });
-    res.write('retry: 2000\n\n');
+    res.flushHeaders();
+    res.write(`retry: 2000\n: ${' '.repeat(2048)}\n\n`);
     clients.set(res, user);
     res.write(groupPayload());
     if (user) userConnected(user);
@@ -312,3 +315,4 @@ server.listen(PORT, '0.0.0.0', () => {
   startTunnel();
 });
 
+      
