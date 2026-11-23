@@ -10,6 +10,7 @@ const PUBLIC_DIR = path.join(__dirname, 'public');
 const MAX_HISTORY = 500;
 const INVITE_FILE = path.join(__dirname, 'invite.json');
 const AVATAR_FILE = path.join(__dirname, 'group-avatar.jpg');
+const MEMBERS_FILE = path.join(__dirname, 'members.json');
 let avatarVersion = fs.existsSync(AVATAR_FILE) ? Math.floor(fs.statSync(AVATAR_FILE).mtimeMs) : 0;
 
 function loadInvite() {
@@ -24,6 +25,28 @@ function loadInvite() {
 }
 
 const INVITE_CODE = loadInvite();
+
+function loadMembers() {
+  try {
+    const saved = JSON.parse(fs.readFileSync(MEMBERS_FILE, 'utf8'));
+    if (Array.isArray(saved)) return new Map(saved.filter(item => item && item.name).map(item => [item.name, item.joined || Date.now()]));
+  } catch {}
+  return new Map();
+}
+
+const members = loadMembers();
+
+function saveMembers() {
+  try {
+    fs.writeFileSync(MEMBERS_FILE, JSON.stringify([...members].map(([name, joined]) => ({ name, joined }))));
+  } catch {}
+}
+
+function memberList() {
+  return [...members.keys()]
+    .map(name => ({ name, online: online.has(name) }))
+    .sort((a, b) => Number(b.online) - Number(a.online) || a.name.localeCompare(b.name));
+}
 
 function validInvite(code) {
   return typeof code === 'string' && code === INVITE_CODE;
@@ -76,7 +99,7 @@ function announce(text) {
 }
 
 function broadcastPresence() {
-  const payload = `event: presence\ndata: ${JSON.stringify({ online: online.size })}\n\n`;
+  const payload = `event: presence\ndata: ${JSON.stringify({ online: online.size, members: memberList() })}\n\n`;
   for (const res of clients.keys()) res.write(payload);
 }
 
@@ -97,6 +120,10 @@ function userConnected(user) {
   }
   const count = online.get(user) || 0;
   online.set(user, count + 1);
+  if (!members.has(user)) {
+    members.set(user, Date.now());
+    saveMembers();
+  }
   if (count === 0 && !pending) announce(`${user} entró al chat`);
   broadcastPresence();
 }
@@ -182,6 +209,12 @@ const server = http.createServer(async (req, res) => {
     const params = new URL(req.url, 'http://localhost').searchParams;
     if (!validInvite(params.get('invite'))) return sendJson(res, 403, { error: 'invite' });
     return sendJson(res, 200, messages);
+  }
+
+  if (req.method === 'GET' && req.url.split('?')[0] === '/api/members') {
+    const params = new URL(req.url, 'http://localhost').searchParams;
+    if (!validInvite(params.get('invite'))) return sendJson(res, 403, { error: 'invite' });
+    return sendJson(res, 200, { online: online.size, members: memberList() });
   }
 
   if (req.method === 'GET' && req.url.split('?')[0] === '/api/invite') {
@@ -272,4 +305,4 @@ server.listen(PORT, '0.0.0.0', () => {
   for (const base of getBaseUrls()) console.log(`Invitar a otros: ${base}/?invite=${INVITE_CODE}`);
   startTunnel();
 });
-    
+
