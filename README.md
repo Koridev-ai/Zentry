@@ -1,4 +1,7 @@
 ```
+termux-chroot
+```
+```
 cd Zentry
 ```
 ```
