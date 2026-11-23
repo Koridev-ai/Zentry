@@ -33,6 +33,15 @@ let members = [];
 let showAllMembers = false;
 let me = null;
 let registerMode = false;
+let lastId = 0;
+let statusText = '';
+let typingNames = [];
+let lastTypingSent = 0;
+let source = null;
+let lastEventAt = 0;
+let pollTimer = null;
+let watchTimer = null;
+let polling = false;
 let token = localStorage.getItem('chat_token') || '';
 
 function authQuery() {
@@ -56,6 +65,7 @@ function initialOf(name) {
 function renderMessage(message) {
   if (seen.has(message.id)) return;
   seen.add(message.id);
+  if (message.id > lastId) lastId = message.id;
 
   if (message.system) {
     const note = document.createElement('div');
@@ -111,61 +121,117 @@ async function loadHistory() {
   return true;
 }
 
+function renderStatus() {
+  if (typingNames.length === 1) {
+    statusEl.textContent = typingNames[0] + ' está escribiendo...';
+  } else if (typingNames.length === 2) {
+    statusEl.textContent = typingNames[0] + ' y ' + typingNames[1] + ' están escribiendo...';
+  } else if (typingNames.length > 2) {
+    statusEl.textContent = typingNames.length + ' personas están escribiendo...';
+  } else {
+    statusEl.textContent = statusText;
+  }
+  statusEl.classList.toggle('typing', typingNames.length > 0);
+}
+
+function setStatus(text) {
+  statusText = text;
+  renderStatus();
+}
+
+function setTyping(list) {
+  typingNames = list.filter(item => !me || item.id !== me.id).map(item => item.name);
+  renderStatus();
+}
+
 function applyPresence(data) {
   const count = data.online;
-  statusEl.textContent = count + (count === 1 ? ' persona en línea' : ' personas en línea');
+  setStatus(count + (count === 1 ? ' persona en línea' : ' personas en línea'));
   if (Array.isArray(data.members)) {
     members = data.members;
     renderMembers();
   }
+  if (Array.isArray(data.typing)) setTyping(data.typing);
+}
+
+function endSession() {
+  stopEvents();
+  clearSession();
+  showLogin();
+}
+
+async function poll() {
+  if (polling || !token) return;
+  polling = true;
+  try {
+    const response = await fetch('/api/history?after=' + lastId + '&' + authQuery());
+    if (response.status === 401) return endSession();
+    if (!response.ok) return;
+    (await response.json()).forEach(renderMessage);
+    const info = await fetch('/api/members?' + authQuery());
+    if (info.ok) applyPresence(await info.json());
+    if (Date.now() - lastEventAt > 20000) loadGroup();
+  } catch {
+  } finally {
+    polling = false;
+  }
+}
+
+function openSource() {
+  if (source) source.close();
+  lastEventAt = Date.now();
+  source = new EventSource('/api/events?' + authQuery());
+  source.onopen = () => {
+    lastEventAt = Date.now();
+  };
+  source.onerror = () => {
+    setStatus('reconectando...');
+  };
+  source.onmessage = event => {
+    lastEventAt = Date.now();
+    renderMessage(JSON.parse(event.data));
+  };
+  source.addEventListener('group', event => {
+    lastEventAt = Date.now();
+    setAvatar(JSON.parse(event.data).avatar);
+  });
+  source.addEventListener('presence', event => {
+    lastEventAt = Date.now();
+    applyPresence(JSON.parse(event.data));
+  });
+  source.addEventListener('typing', event => {
+    lastEventAt = Date.now();
+    setTyping(JSON.parse(event.data));
+  });
+  source.addEventListener('ping', () => {
+    lastEventAt = Date.now();
+  });
+}
+
+function stopEvents() {
+  if (source) source.close();
+  source = null;
+  clearInterval(pollTimer);
+  clearInterval(watchTimer);
+  pollTimer = null;
+  watchTimer = null;
+  typingNames = [];
 }
 
 function connectEvents() {
-  const source = new EventSource('/api/events?' + authQuery());
-  let poller = null;
-  let opened = false;
-  const poll = async () => {
-    try {
-      const response = await fetch('/api/history?' + authQuery());
-      if (!response.ok) return;
-      (await response.json()).forEach(renderMessage);
-      loadGroup();
-      const info = await fetch('/api/members?' + authQuery());
-      if (info.ok) applyPresence(await info.json());
-      else statusEl.textContent = 'en línea';
-    } catch {}
-  };
-  const startPolling = () => {
-    if (poller) return;
-    poll();
-    poller = setInterval(poll, 1500);
-  };
-  setTimeout(() => {
-    if (!opened) startPolling();
-  }, 3000);
-  source.onopen = () => {
-    opened = true;
-    if (poller) {
-      clearInterval(poller);
-      poller = null;
-    }
-  };
-  source.onerror = () => {
-    opened = false;
-    statusEl.textContent = 'reconectando...';
-    startPolling();
-  };
-  source.onmessage = event => renderMessage(JSON.parse(event.data));
-  source.addEventListener('group', event => setAvatar(JSON.parse(event.data).avatar));
-  source.addEventListener('presence', event => {
-    if (poller) {
-      clearInterval(poller);
-      poller = null;
-    }
-    opened = true;
-    applyPresence(JSON.parse(event.data));
-  });
+  stopEvents();
+  openSource();
+  pollTimer = setInterval(poll, 2500);
+  watchTimer = setInterval(() => {
+    if (Date.now() - lastEventAt > 40000) openSource();
+  }, 10000);
 }
+
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState !== 'visible' || !token || !pollTimer) return;
+  poll();
+  if (Date.now() - lastEventAt > 20000) openSource();
+});
 
 function showLoginError(text) {
   loginError.textContent = text;
@@ -376,11 +442,20 @@ logoutBtn.addEventListener('click', async () => {
   location.reload();
 });
 
+msgInput.addEventListener('input', () => {
+  if (!msgInput.value.trim()) return;
+  const now = Date.now();
+  if (now - lastTypingSent < 2500) return;
+  lastTypingSent = now;
+  fetch('/api/typing?' + authQuery(), { method: 'POST' }).catch(() => {});
+});
+
 sendForm.addEventListener('submit', async event => {
   event.preventDefault();
   const text = msgInput.value.trim();
   if (!text) return;
   msgInput.value = '';
+  lastTypingSent = 0;
   try {
     const response = await fetch('/api/send?' + authQuery(), {
       method: 'POST',
