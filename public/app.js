@@ -6,10 +6,20 @@ const sendForm = document.getElementById('sendForm');
 const msgInput = document.getElementById('msgInput');
 const messagesEl = document.getElementById('messages');
 const statusEl = document.getElementById('status');
+const loginError = document.getElementById('loginError');
+const inviteBtn = document.getElementById('inviteBtn');
+const toastEl = document.getElementById('toast');
 
 const COLORS = ['#53bdeb', '#e26ab6', '#ffa726', '#9ccc65', '#ba68c8', '#4db6ac', '#ff7043', '#fdd835'];
 const seen = new Set();
 let username = localStorage.getItem('chat_user') || '';
+
+const urlInvite = new URLSearchParams(location.search).get('invite');
+if (urlInvite) {
+  localStorage.setItem('chat_invite', urlInvite);
+  window.history.replaceState(null, '', location.pathname);
+}
+let invite = localStorage.getItem('chat_invite') || '';
 
 function colorFor(name) {
   let hash = 0;
@@ -62,14 +72,16 @@ function renderMessage(message) {
 }
 
 async function loadHistory() {
-  const response = await fetch('/api/history');
+  const response = await fetch('/api/history?invite=' + encodeURIComponent(invite));
+  if (!response.ok) return false;
   const history = await response.json();
   history.forEach(renderMessage);
   messagesEl.scrollTop = messagesEl.scrollHeight;
+  return true;
 }
 
 function connectEvents() {
-  const source = new EventSource('/api/events?user=' + encodeURIComponent(username));
+  const source = new EventSource('/api/events?user=' + encodeURIComponent(username) + '&invite=' + encodeURIComponent(invite));
   source.onopen = () => { statusEl.textContent = 'en línea'; };
   source.onerror = () => { statusEl.textContent = 'reconectando...'; };
   source.onmessage = event => renderMessage(JSON.parse(event.data));
@@ -79,18 +91,72 @@ function connectEvents() {
   });
 }
 
+function showLoginError(text) {
+  loginError.textContent = text;
+  loginError.classList.remove('hidden');
+  loginEl.classList.remove('hidden');
+  chatEl.classList.add('hidden');
+}
+
+function showToast(text) {
+  toastEl.textContent = text;
+  toastEl.classList.remove('hidden');
+  setTimeout(() => toastEl.classList.add('hidden'), 2000);
+}
+
+async function copyText(text) {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    const area = document.createElement('textarea');
+    area.value = text;
+    area.style.position = 'fixed';
+    area.style.opacity = '0';
+    document.body.appendChild(area);
+    area.select();
+    const ok = document.execCommand('copy');
+    area.remove();
+    return ok;
+  }
+}
+
+async function buildInviteLink() {
+  const response = await fetch('/api/invite?invite=' + encodeURIComponent(invite));
+  const info = await response.json();
+  const local = ['localhost', '127.0.0.1'].includes(location.hostname);
+  const base = local && info.urls.length ? info.urls[0] : location.origin;
+  return base + '/?invite=' + encodeURIComponent(info.code);
+}
+
 async function enterChat() {
+  const loaded = await loadHistory();
+  if (!loaded) {
+    invite = '';
+    localStorage.removeItem('chat_invite');
+    showLoginError('El enlace de invitación no es válido');
+    return;
+  }
   loginEl.classList.add('hidden');
   chatEl.classList.remove('hidden');
-  await loadHistory();
   connectEvents();
   msgInput.focus();
 }
+
+inviteBtn.addEventListener('click', async () => {
+  const link = await buildInviteLink();
+  if (await copyText(link)) showToast('Enlace de invitación copiado');
+  else window.prompt('Copia el enlace', link);
+});
 
 loginForm.addEventListener('submit', event => {
   event.preventDefault();
   const value = nameInput.value.trim();
   if (!value) return;
+  if (!invite) {
+    showLoginError('Necesitas un enlace de invitación para entrar');
+    return;
+  }
   username = value;
   localStorage.setItem('chat_user', username);
   enterChat();
@@ -104,9 +170,10 @@ sendForm.addEventListener('submit', async event => {
   await fetch('/api/send', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ user: username, text })
+    body: JSON.stringify({ user: username, text, invite })
   });
   msgInput.focus();
 });
 
-if (username) enterChat();
+if (!invite) showLoginError('Necesitas un enlace de invitación para entrar');
+else if (username) enterChat();
