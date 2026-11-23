@@ -104,42 +104,59 @@ async function loadHistory() {
   return true;
 }
 
+function applyPresence(data) {
+  const count = data.online;
+  statusEl.textContent = count + (count === 1 ? ' persona en línea' : ' personas en línea');
+  if (Array.isArray(data.members)) {
+    members = data.members;
+    renderMembers();
+  }
+}
+
 function connectEvents() {
   const source = new EventSource('/api/events?user=' + encodeURIComponent(username) + '&invite=' + encodeURIComponent(invite));
   let poller = null;
+  let opened = false;
   const poll = async () => {
     try {
       const response = await fetch('/api/history?invite=' + encodeURIComponent(invite));
       if (!response.ok) return;
       (await response.json()).forEach(renderMessage);
       loadGroup();
-      statusEl.textContent = 'en línea';
+      const info = await fetch('/api/members?invite=' + encodeURIComponent(invite));
+      if (info.ok) applyPresence(await info.json());
+      else statusEl.textContent = 'en línea';
     } catch {}
   };
+  const startPolling = () => {
+    if (poller) return;
+    poll();
+    poller = setInterval(poll, 1500);
+  };
+  setTimeout(() => {
+    if (!opened) startPolling();
+  }, 3000);
   source.onopen = () => {
-    statusEl.textContent = 'en línea';
+    opened = true;
     if (poller) {
       clearInterval(poller);
       poller = null;
     }
   };
   source.onerror = () => {
+    opened = false;
     statusEl.textContent = 'reconectando...';
-    if (!poller) {
-      poll();
-      poller = setInterval(poll, 1500);
-    }
+    startPolling();
   };
   source.onmessage = event => renderMessage(JSON.parse(event.data));
   source.addEventListener('group', event => setAvatar(JSON.parse(event.data).avatar));
   source.addEventListener('presence', event => {
-    const data = JSON.parse(event.data);
-    const count = data.online;
-    statusEl.textContent = count + (count === 1 ? ' persona en línea' : ' personas en línea');
-    if (Array.isArray(data.members)) {
-      members = data.members;
-      renderMembers();
+    if (poller) {
+      clearInterval(poller);
+      poller = null;
     }
+    opened = true;
+    applyPresence(JSON.parse(event.data));
   });
 }
 
