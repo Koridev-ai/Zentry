@@ -4,3 +4,5 @@ avatars
 users.json
 sessions.json
 chats.json
+vapid.json
+push.json
