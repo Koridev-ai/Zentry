@@ -86,8 +86,29 @@ async function loadHistory() {
 
 function connectEvents() {
   const source = new EventSource('/api/events?user=' + encodeURIComponent(username) + '&invite=' + encodeURIComponent(invite));
-  source.onopen = () => { statusEl.textContent = 'en línea'; };
-  source.onerror = () => { statusEl.textContent = 'reconectando...'; };
+  let poller = null;
+  const poll = async () => {
+    try {
+      const response = await fetch('/api/history?invite=' + encodeURIComponent(invite));
+      if (!response.ok) return;
+      (await response.json()).forEach(renderMessage);
+      statusEl.textContent = 'en línea';
+    } catch {}
+  };
+  source.onopen = () => {
+    statusEl.textContent = 'en línea';
+    if (poller) {
+      clearInterval(poller);
+      poller = null;
+    }
+  };
+  source.onerror = () => {
+    statusEl.textContent = 'reconectando...';
+    if (!poller) {
+      poll();
+      poller = setInterval(poll, 1500);
+    }
+  };
   source.onmessage = event => renderMessage(JSON.parse(event.data));
   source.addEventListener('group', event => setAvatar(JSON.parse(event.data).avatar));
   source.addEventListener('presence', event => {
@@ -231,11 +252,14 @@ sendForm.addEventListener('submit', async event => {
   const text = msgInput.value.trim();
   if (!text) return;
   msgInput.value = '';
-  await fetch('/api/send', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ user: username, text, invite })
-  });
+  try {
+    const response = await fetch('/api/send', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ user: username, text, invite })
+    });
+    if (response.ok) renderMessage(await response.json());
+  } catch {}
   msgInput.focus();
 });
 
