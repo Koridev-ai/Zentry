@@ -9,6 +9,10 @@ const statusEl = document.getElementById('status');
 const loginError = document.getElementById('loginError');
 const inviteBtn = document.getElementById('inviteBtn');
 const toastEl = document.getElementById('toast');
+const avatarBtn = document.getElementById('avatarBtn');
+const avatarImg = document.getElementById('avatarImg');
+const avatarLetter = document.getElementById('avatarLetter');
+const avatarInput = document.getElementById('avatarInput');
 
 const COLORS = ['#53bdeb', '#e26ab6', '#ffa726', '#9ccc65', '#ba68c8', '#4db6ac', '#ff7043', '#fdd835'];
 const seen = new Set();
@@ -85,6 +89,7 @@ function connectEvents() {
   source.onopen = () => { statusEl.textContent = 'en línea'; };
   source.onerror = () => { statusEl.textContent = 'reconectando...'; };
   source.onmessage = event => renderMessage(JSON.parse(event.data));
+  source.addEventListener('group', event => setAvatar(JSON.parse(event.data).avatar));
   source.addEventListener('presence', event => {
     const count = JSON.parse(event.data).online;
     statusEl.textContent = count + (count === 1 ? ' persona en línea' : ' personas en línea');
@@ -142,6 +147,65 @@ async function enterChat() {
   connectEvents();
   msgInput.focus();
 }
+
+function setAvatar(version) {
+  if (!version) return;
+  avatarImg.src = '/api/group-avatar?invite=' + encodeURIComponent(invite) + '&v=' + version;
+  avatarImg.classList.remove('hidden');
+  avatarLetter.classList.add('hidden');
+}
+
+function resizeImage(file) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      const size = 256;
+      const side = Math.min(img.width, img.height);
+      const canvas = document.createElement('canvas');
+      canvas.width = size;
+      canvas.height = size;
+      canvas.getContext('2d').drawImage(
+        img,
+        (img.width - side) / 2,
+        (img.height - side) / 2,
+        side,
+        side,
+        0,
+        0,
+        size,
+        size
+      );
+      URL.revokeObjectURL(url);
+      resolve(canvas.toDataURL('image/jpeg', 0.85));
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error('image'));
+    };
+    img.src = url;
+  });
+}
+
+avatarBtn.addEventListener('click', () => avatarInput.click());
+
+avatarInput.addEventListener('change', async () => {
+  const file = avatarInput.files[0];
+  avatarInput.value = '';
+  if (!file) return;
+  try {
+    const image = await resizeImage(file);
+    const response = await fetch('/api/group-avatar?invite=' + encodeURIComponent(invite), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ user: username, image })
+    });
+    if (!response.ok) throw new Error('upload');
+    showToast('Foto del grupo actualizada');
+  } catch {
+    showToast('No se pudo cambiar la foto');
+  }
+});
 
 inviteBtn.addEventListener('click', async () => {
   const link = await buildInviteLink();
