@@ -1,12 +1,11 @@
 const loginEl = document.getElementById('login');
 const chatEl = document.getElementById('chat');
-const loginForm = document.getElementById('loginForm');
-const nameInput = document.getElementById('nameInput');
 const sendForm = document.getElementById('sendForm');
 const msgInput = document.getElementById('msgInput');
 const messagesEl = document.getElementById('messages');
 const statusEl = document.getElementById('status');
 const loginError = document.getElementById('loginError');
+const googleBtn = document.getElementById('googleBtn');
 const inviteBtn = document.getElementById('inviteBtn');
 const toastEl = document.getElementById('toast');
 const avatarBtn = document.getElementById('avatarBtn');
@@ -21,13 +20,16 @@ const infoLetter = document.getElementById('infoLetter');
 const infoCount = document.getElementById('infoCount');
 const memberList = document.getElementById('memberList');
 const memberMore = document.getElementById('memberMore');
+const logoutBtn = document.getElementById('logoutBtn');
 
 const COLORS = ['#53bdeb', '#e26ab6', '#ffa726', '#9ccc65', '#ba68c8', '#4db6ac', '#ff7043', '#fdd835'];
-const seen = new Set();
 const MEMBERS_PREVIEW = 7;
+const seen = new Set();
 let members = [];
 let showAllMembers = false;
-let username = localStorage.getItem('chat_user') || '';
+let googleReady = false;
+let me = null;
+let token = localStorage.getItem('chat_token') || '';
 
 const urlInvite = new URLSearchParams(location.search).get('invite');
 if (urlInvite) {
@@ -36,14 +38,22 @@ if (urlInvite) {
 }
 let invite = localStorage.getItem('chat_invite') || '';
 
-function colorFor(name) {
+function authQuery() {
+  return 'invite=' + encodeURIComponent(invite) + '&token=' + encodeURIComponent(token);
+}
+
+function colorFor(key) {
   let hash = 0;
-  for (const ch of name) hash = (hash * 31 + ch.charCodeAt(0)) >>> 0;
+  for (const ch of String(key)) hash = (hash * 31 + ch.charCodeAt(0)) >>> 0;
   return COLORS[hash % COLORS.length];
 }
 
 function formatTime(ts) {
   return new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+}
+
+function initialOf(name) {
+  return (Array.from(String(name).trim())[0] || '?').toUpperCase();
 }
 
 function renderMessage(message) {
@@ -61,14 +71,14 @@ function renderMessage(message) {
     return;
   }
 
-  const mine = message.user === username;
+  const mine = !!me && message.uid === me.id;
   const wrapper = document.createElement('div');
   wrapper.className = 'msg ' + (mine ? 'mine' : 'other');
 
   if (!mine) {
     const author = document.createElement('div');
     author.className = 'author';
-    author.style.color = colorFor(message.user);
+    author.style.color = colorFor(message.uid || message.user);
     author.textContent = message.user;
     wrapper.appendChild(author);
   }
@@ -89,14 +99,14 @@ function renderMessage(message) {
 
 async function loadGroup() {
   try {
-    const response = await fetch('/api/group?invite=' + encodeURIComponent(invite));
+    const response = await fetch('/api/group?' + authQuery());
     if (!response.ok) return;
     setAvatar((await response.json()).avatar);
   } catch {}
 }
 
 async function loadHistory() {
-  const response = await fetch('/api/history?invite=' + encodeURIComponent(invite));
+  const response = await fetch('/api/history?' + authQuery());
   if (!response.ok) return false;
   const history = await response.json();
   history.forEach(renderMessage);
@@ -114,16 +124,16 @@ function applyPresence(data) {
 }
 
 function connectEvents() {
-  const source = new EventSource('/api/events?user=' + encodeURIComponent(username) + '&invite=' + encodeURIComponent(invite));
+  const source = new EventSource('/api/events?' + authQuery());
   let poller = null;
   let opened = false;
   const poll = async () => {
     try {
-      const response = await fetch('/api/history?invite=' + encodeURIComponent(invite));
+      const response = await fetch('/api/history?' + authQuery());
       if (!response.ok) return;
       (await response.json()).forEach(renderMessage);
       loadGroup();
-      const info = await fetch('/api/members?invite=' + encodeURIComponent(invite));
+      const info = await fetch('/api/members?' + authQuery());
       if (info.ok) applyPresence(await info.json());
       else statusEl.textContent = 'en línea';
     } catch {}
@@ -191,21 +201,104 @@ async function copyText(text) {
 }
 
 async function buildInviteLink() {
-  const response = await fetch('/api/invite?invite=' + encodeURIComponent(invite));
+  const response = await fetch('/api/invite?' + authQuery());
   const info = await response.json();
   const local = ['localhost', '127.0.0.1'].includes(location.hostname);
   const base = local && info.urls.length ? info.urls[0] : location.origin;
   return base + '/?invite=' + encodeURIComponent(info.code);
 }
 
-async function enterChat() {
-  const loaded = await loadHistory();
-  if (!loaded) {
-    invite = '';
-    localStorage.removeItem('chat_invite');
-    showLoginError('El enlace de invitación no es válido');
+function clearSession() {
+  token = '';
+  me = null;
+  localStorage.removeItem('chat_token');
+}
+
+function waitForGoogle() {
+  return new Promise(resolve => {
+    let tries = 0;
+    const check = () => {
+      if (window.google && window.google.accounts && window.google.accounts.id) return resolve(true);
+      tries += 1;
+      if (tries > 50) return resolve(false);
+      setTimeout(check, 200);
+    };
+    check();
+  });
+}
+
+async function onGoogleCredential(result) {
+  try {
+    const response = await fetch('/api/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ credential: result.credential, invite })
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      if (data.error === 'invite') showLoginError('El enlace de invitación no es válido');
+      else if (data.error === 'config') showLoginError('El servidor no tiene configurado Google');
+      else showLoginError('No se pudo verificar tu cuenta de Google');
+      return;
+    }
+    token = data.token;
+    localStorage.setItem('chat_token', token);
+    loginError.classList.add('hidden');
+    enterChat();
+  } catch {
+    showLoginError('No se pudo iniciar sesión');
+  }
+}
+
+async function showLogin() {
+  loginEl.classList.remove('hidden');
+  chatEl.classList.add('hidden');
+  if (googleReady) return;
+  let clientId = '';
+  try {
+    clientId = (await (await fetch('/api/config')).json()).googleClientId;
+  } catch {}
+  if (!clientId) {
+    showLoginError('El servidor no tiene configurado Google');
     return;
   }
+  if (!(await waitForGoogle())) {
+    showLoginError('No se pudo cargar el inicio de sesión de Google');
+    return;
+  }
+  window.google.accounts.id.initialize({ client_id: clientId, callback: onGoogleCredential });
+  window.google.accounts.id.renderButton(googleBtn, {
+    theme: 'filled_black',
+    size: 'large',
+    shape: 'pill',
+    text: 'continue_with',
+    width: 280
+  });
+  googleReady = true;
+}
+
+async function enterChat() {
+  let response;
+  try {
+    response = await fetch('/api/me?' + authQuery());
+  } catch {
+    showLoginError('No se pudo conectar con el servidor');
+    return;
+  }
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({}));
+    if (data.error === 'invite') {
+      invite = '';
+      localStorage.removeItem('chat_invite');
+      showLoginError('El enlace de invitación no es válido');
+      return;
+    }
+    clearSession();
+    showLogin();
+    return;
+  }
+  me = (await response.json()).user;
+  await loadHistory();
   loginEl.classList.add('hidden');
   chatEl.classList.remove('hidden');
   loadGroup();
@@ -215,7 +308,7 @@ async function enterChat() {
 
 function setAvatar(version) {
   if (!version) return;
-  const src = '/api/group-avatar?invite=' + encodeURIComponent(invite) + '&v=' + version;
+  const src = '/api/group-avatar?' + authQuery() + '&v=' + version;
   avatarImg.src = src;
   avatarImg.classList.remove('hidden');
   avatarLetter.classList.add('hidden');
@@ -224,25 +317,29 @@ function setAvatar(version) {
   infoLetter.classList.add('hidden');
 }
 
-function initialOf(name) {
-  return (Array.from(name.trim())[0] || '?').toUpperCase();
-}
-
-function memberRow(name, online, isMe) {
+function memberRow(person, online, isMe) {
   const row = document.createElement('li');
   row.className = 'member';
 
   const avatar = document.createElement('div');
   avatar.className = 'member-avatar';
-  avatar.style.background = colorFor(name);
-  avatar.textContent = initialOf(name);
+  avatar.style.background = colorFor(person.id);
+  avatar.textContent = initialOf(person.name);
+  if (person.picture) {
+    const img = document.createElement('img');
+    img.referrerPolicy = 'no-referrer';
+    img.alt = '';
+    img.addEventListener('error', () => img.remove());
+    img.src = person.picture;
+    avatar.appendChild(img);
+  }
   row.appendChild(avatar);
 
   const info = document.createElement('div');
   info.className = 'member-info';
   const title = document.createElement('span');
   title.className = 'member-name';
-  title.textContent = isMe ? 'Tú' : name;
+  title.textContent = isMe ? 'Tú' : person.name;
   info.appendChild(title);
   const state = document.createElement('span');
   state.className = 'member-state' + (online ? ' on' : '');
@@ -254,15 +351,16 @@ function memberRow(name, online, isMe) {
 }
 
 function renderMembers() {
-  const others = members.filter(item => item.name !== username);
+  if (!me) return;
+  const others = members.filter(item => item.id !== me.id);
   const total = others.length + 1;
   infoCount.textContent = total + (total === 1 ? ' miembro' : ' miembros');
 
   memberList.textContent = '';
-  memberList.appendChild(memberRow(username, true, true));
+  memberList.appendChild(memberRow(me, true, true));
 
   const visible = showAllMembers ? others : others.slice(0, MEMBERS_PREVIEW - 1);
-  visible.forEach(item => memberList.appendChild(memberRow(item.name, item.online, false)));
+  visible.forEach(item => memberList.appendChild(memberRow(item, item.online, false)));
 
   const hidden = others.length - visible.length;
   if (hidden > 0) {
@@ -278,7 +376,7 @@ async function openGroupInfo() {
   renderMembers();
   groupInfo.classList.remove('hidden');
   try {
-    const response = await fetch('/api/members?invite=' + encodeURIComponent(invite));
+    const response = await fetch('/api/members?' + authQuery());
     if (!response.ok) return;
     members = (await response.json()).members;
     renderMembers();
@@ -288,16 +386,6 @@ async function openGroupInfo() {
 function closeGroupInfo() {
   groupInfo.classList.add('hidden');
 }
-
-groupTitle.addEventListener('click', openGroupInfo);
-infoBack.addEventListener('click', closeGroupInfo);
-memberMore.addEventListener('click', () => {
-  showAllMembers = true;
-  renderMembers();
-});
-document.addEventListener('keydown', event => {
-  if (event.key === 'Escape') closeGroupInfo();
-});
 
 function resizeImage(file) {
   return new Promise((resolve, reject) => {
@@ -349,10 +437,10 @@ avatarInput.addEventListener('change', async () => {
   if (!file) return;
   try {
     const image = await resizeImage(file);
-    const response = await fetch('/api/group-avatar?invite=' + encodeURIComponent(invite), {
+    const response = await fetch('/api/group-avatar?' + authQuery(), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ user: username, image })
+      body: JSON.stringify({ image })
     });
     if (!response.ok) throw new Error('upload');
     showToast('Foto del grupo actualizada');
@@ -367,17 +455,22 @@ inviteBtn.addEventListener('click', async () => {
   else window.prompt('Copia el enlace', link);
 });
 
-loginForm.addEventListener('submit', event => {
-  event.preventDefault();
-  const value = nameInput.value.trim();
-  if (!value) return;
-  if (!invite) {
-    showLoginError('Necesitas un enlace de invitación para entrar');
-    return;
-  }
-  username = value;
-  localStorage.setItem('chat_user', username);
-  enterChat();
+groupTitle.addEventListener('click', openGroupInfo);
+infoBack.addEventListener('click', closeGroupInfo);
+memberMore.addEventListener('click', () => {
+  showAllMembers = true;
+  renderMembers();
+});
+document.addEventListener('keydown', event => {
+  if (event.key === 'Escape') closeGroupInfo();
+});
+
+logoutBtn.addEventListener('click', async () => {
+  try {
+    await fetch('/api/logout?token=' + encodeURIComponent(token), { method: 'POST' });
+  } catch {}
+  clearSession();
+  location.reload();
 });
 
 sendForm.addEventListener('submit', async event => {
@@ -386,10 +479,10 @@ sendForm.addEventListener('submit', async event => {
   if (!text) return;
   msgInput.value = '';
   try {
-    const response = await fetch('/api/send', {
+    const response = await fetch('/api/send?' + authQuery(), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ user: username, text, invite })
+      body: JSON.stringify({ text })
     });
     if (response.ok) renderMessage(await response.json());
   } catch {}
@@ -397,6 +490,5 @@ sendForm.addEventListener('submit', async event => {
 });
 
 if (!invite) showLoginError('Necesitas un enlace de invitación para entrar');
-else if (username) enterChat();
-
-    
+else if (token) enterChat();
+else showLogin();
