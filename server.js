@@ -1,10 +1,43 @@
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
+const os = require('os');
+const crypto = require('crypto');
 
 const PORT = process.env.PORT || 3000;
 const PUBLIC_DIR = path.join(__dirname, 'public');
 const MAX_HISTORY = 500;
+const INVITE_FILE = path.join(__dirname, 'invite.json');
+
+function loadInvite() {
+  if (process.env.INVITE_CODE) return process.env.INVITE_CODE;
+  try {
+    const saved = JSON.parse(fs.readFileSync(INVITE_FILE, 'utf8')).code;
+    if (saved) return saved;
+  } catch {}
+  const code = crypto.randomBytes(5).toString('hex');
+  fs.writeFileSync(INVITE_FILE, JSON.stringify({ code }));
+  return code;
+}
+
+const INVITE_CODE = loadInvite();
+
+function validInvite(code) {
+  return typeof code === 'string' && code === INVITE_CODE;
+}
+
+function getBaseUrls() {
+  if (process.env.PUBLIC_URL) return [process.env.PUBLIC_URL.replace(/\/$/, '')];
+  const urls = [];
+  try {
+    for (const list of Object.values(os.networkInterfaces())) {
+      for (const item of list || []) {
+        if (item.family === 'IPv4' && !item.internal) urls.push(`http://${item.address}:${PORT}`);
+      }
+    }
+  } catch {}
+  return urls;
+}
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -109,7 +142,12 @@ function serveStatic(req, res) {
 
 const server = http.createServer(async (req, res) => {
   if (req.method === 'GET' && req.url.split('?')[0] === '/api/events') {
-    const user = (new URL(req.url, 'http://localhost').searchParams.get('user') || '').trim().slice(0, 30);
+    const params = new URL(req.url, 'http://localhost').searchParams;
+    if (!validInvite(params.get('invite'))) {
+      res.writeHead(403);
+      return res.end('invite');
+    }
+    const user = (params.get('user') || '').trim().slice(0, 30);
     res.writeHead(200, {
       'Content-Type': 'text/event-stream',
       'Cache-Control': 'no-cache',
@@ -125,13 +163,22 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  if (req.method === 'GET' && req.url === '/api/history') {
+  if (req.method === 'GET' && req.url.split('?')[0] === '/api/history') {
+    const params = new URL(req.url, 'http://localhost').searchParams;
+    if (!validInvite(params.get('invite'))) return sendJson(res, 403, { error: 'invite' });
     return sendJson(res, 200, messages);
+  }
+
+  if (req.method === 'GET' && req.url.split('?')[0] === '/api/invite') {
+    const params = new URL(req.url, 'http://localhost').searchParams;
+    if (!validInvite(params.get('invite'))) return sendJson(res, 403, { error: 'invite' });
+    return sendJson(res, 200, { code: INVITE_CODE, urls: getBaseUrls() });
   }
 
   if (req.method === 'POST' && req.url === '/api/send') {
     try {
       const data = JSON.parse(await readBody(req));
+      if (!validInvite(data.invite)) return sendJson(res, 403, { error: 'invite' });
       const user = String(data.user || '').trim().slice(0, 30);
       const text = String(data.text || '').trim().slice(0, 2000);
       if (!user || !text) return sendJson(res, 400, { error: 'invalid' });
@@ -155,4 +202,6 @@ setInterval(() => {
 
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`WhatsApp Web listo en http://localhost:${PORT}`);
+  console.log(`Entrar tú: http://localhost:${PORT}/?invite=${INVITE_CODE}`);
+  for (const base of getBaseUrls()) console.log(`Invitar a otros: ${base}/?invite=${INVITE_CODE}`);
 });
