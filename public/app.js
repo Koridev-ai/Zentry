@@ -13,9 +13,20 @@ const avatarBtn = document.getElementById('avatarBtn');
 const avatarImg = document.getElementById('avatarImg');
 const avatarLetter = document.getElementById('avatarLetter');
 const avatarInput = document.getElementById('avatarInput');
+const groupTitle = document.getElementById('groupTitle');
+const groupInfo = document.getElementById('groupInfo');
+const infoBack = document.getElementById('infoBack');
+const infoImg = document.getElementById('infoImg');
+const infoLetter = document.getElementById('infoLetter');
+const infoCount = document.getElementById('infoCount');
+const memberList = document.getElementById('memberList');
+const memberMore = document.getElementById('memberMore');
 
 const COLORS = ['#53bdeb', '#e26ab6', '#ffa726', '#9ccc65', '#ba68c8', '#4db6ac', '#ff7043', '#fdd835'];
 const seen = new Set();
+const MEMBERS_PREVIEW = 7;
+let members = [];
+let showAllMembers = false;
 let username = localStorage.getItem('chat_user') || '';
 
 const urlInvite = new URLSearchParams(location.search).get('invite');
@@ -113,8 +124,13 @@ function connectEvents() {
   source.onmessage = event => renderMessage(JSON.parse(event.data));
   source.addEventListener('group', event => setAvatar(JSON.parse(event.data).avatar));
   source.addEventListener('presence', event => {
-    const count = JSON.parse(event.data).online;
+    const data = JSON.parse(event.data);
+    const count = data.online;
     statusEl.textContent = count + (count === 1 ? ' persona en línea' : ' personas en línea');
+    if (Array.isArray(data.members)) {
+      members = data.members;
+      renderMembers();
+    }
   });
 }
 
@@ -172,10 +188,89 @@ async function enterChat() {
 
 function setAvatar(version) {
   if (!version) return;
-  avatarImg.src = '/api/group-avatar?invite=' + encodeURIComponent(invite) + '&v=' + version;
+  const src = '/api/group-avatar?invite=' + encodeURIComponent(invite) + '&v=' + version;
+  avatarImg.src = src;
   avatarImg.classList.remove('hidden');
   avatarLetter.classList.add('hidden');
+  infoImg.src = src;
+  infoImg.classList.remove('hidden');
+  infoLetter.classList.add('hidden');
 }
+
+function initialOf(name) {
+  return (Array.from(name.trim())[0] || '?').toUpperCase();
+}
+
+function memberRow(name, online, isMe) {
+  const row = document.createElement('li');
+  row.className = 'member';
+
+  const avatar = document.createElement('div');
+  avatar.className = 'member-avatar';
+  avatar.style.background = colorFor(name);
+  avatar.textContent = initialOf(name);
+  row.appendChild(avatar);
+
+  const info = document.createElement('div');
+  info.className = 'member-info';
+  const title = document.createElement('span');
+  title.className = 'member-name';
+  title.textContent = isMe ? 'Tú' : name;
+  info.appendChild(title);
+  const state = document.createElement('span');
+  state.className = 'member-state' + (online ? ' on' : '');
+  state.textContent = online ? '✦ en línea' : 'desconectado';
+  info.appendChild(state);
+  row.appendChild(info);
+
+  return row;
+}
+
+function renderMembers() {
+  const others = members.filter(item => item.name !== username);
+  const total = others.length + 1;
+  infoCount.textContent = total + (total === 1 ? ' miembro' : ' miembros');
+
+  memberList.textContent = '';
+  memberList.appendChild(memberRow(username, true, true));
+
+  const visible = showAllMembers ? others : others.slice(0, MEMBERS_PREVIEW - 1);
+  visible.forEach(item => memberList.appendChild(memberRow(item.name, item.online, false)));
+
+  const hidden = others.length - visible.length;
+  if (hidden > 0) {
+    memberMore.textContent = 'Ver todos (' + hidden + ' más)';
+    memberMore.classList.remove('hidden');
+  } else {
+    memberMore.classList.add('hidden');
+  }
+}
+
+async function openGroupInfo() {
+  showAllMembers = false;
+  renderMembers();
+  groupInfo.classList.remove('hidden');
+  try {
+    const response = await fetch('/api/members?invite=' + encodeURIComponent(invite));
+    if (!response.ok) return;
+    members = (await response.json()).members;
+    renderMembers();
+  } catch {}
+}
+
+function closeGroupInfo() {
+  groupInfo.classList.add('hidden');
+}
+
+groupTitle.addEventListener('click', openGroupInfo);
+infoBack.addEventListener('click', closeGroupInfo);
+memberMore.addEventListener('click', () => {
+  showAllMembers = true;
+  renderMembers();
+});
+document.addEventListener('keydown', event => {
+  if (event.key === 'Escape') closeGroupInfo();
+});
 
 function resizeImage(file) {
   return new Promise((resolve, reject) => {
@@ -266,4 +361,4 @@ sendForm.addEventListener('submit', async event => {
 
 if (!invite) showLoginError('Necesitas un enlace de invitación para entrar');
 else if (username) enterChat();
-  
+
