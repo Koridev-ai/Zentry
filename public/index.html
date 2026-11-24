@@ -1,0 +1,628 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+  <meta name="theme-color" content="#202c33">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Zentry">
+  <title>Zentry</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" type="image/png" href="icon-192.png">
+  <link rel="apple-touch-icon" href="apple-touch-icon.png">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="login" class="login">
+    <div class="login-card">
+      <div class="logo">✦</div>
+      <h1>Zentry</h1>
+      <p id="loginSubtitle">Inicia sesión para entrar</p>
+      <form id="loginForm">
+        <div id="signupPhoto" class="signup-photo hidden">
+          <button id="signupAvatar" class="signup-avatar" type="button" aria-label="Elegir foto de perfil"></button>
+          <span>Foto de perfil (opcional)</span>
+          <input id="signupInput" type="file" accept="image/*" class="hidden">
+        </div>
+        <input id="usernameInput" type="text" maxlength="20" placeholder="Usuario" autocomplete="username" autocapitalize="none" spellcheck="false">
+        <div class="password-field">
+          <input id="passwordInput" type="password" maxlength="100" placeholder="Contraseña" autocomplete="current-password">
+          <button id="passwordToggle" class="pw-toggle" type="button" aria-label="Mostrar contraseña" aria-pressed="false">
+            <svg class="ic-eye" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>
+            <svg class="ic-eye-off hidden" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3l18 18"/><path d="M10.6 5.1A10.7 10.7 0 0 1 12 5c6.4 0 10 7 10 7a17.6 17.6 0 0 1-3.2 4.1M6.6 6.6A17.4 17.4 0 0 0 2 12s3.6 7 10 7a10.3 10.3 0 0 0 4.4-1"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/></svg>
+          </button>
+        </div>
+        <button id="passwordGenerate" class="pw-generate hidden" type="button">Generar contraseña segura</button>
+        <button id="loginSubmit" type="submit">Entrar</button>
+      </form>
+      <p id="loginError" class="login-error hidden"></p>
+      <button id="loginToggle" class="login-toggle" type="button">¿No tienes cuenta? Crear una</button>
+    </div>
+  </div>
+
+  <div id="home" class="home hidden">
+    <header class="home-top">
+      <h1 id="homeTitle">Zentry</h1>
+      <div class="home-actions">
+        <button id="profileBtn" class="avatar" type="button" aria-label="Mi perfil"></button>
+        <button id="menuBtn" class="menu-btn" type="button" aria-label="Más opciones" aria-haspopup="true">
+          <svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg>
+        </button>
+      </div>
+      <div id="homeMenu" class="pop-menu hidden" role="menu">
+        <button id="menuDevices" class="pop-item" type="button" role="menuitem">Dispositivos vinculados</button>
+      </div>
+    </header>
+    <section id="tabChats" class="tab-panel">
+      <div id="pushBanner" class="push-banner hidden">
+        <span>Activa las notificaciones para enterarte de los mensajes nuevos</span>
+        <button id="pushBannerGo" class="push-banner-go" type="button">Activar</button>
+        <button id="pushBannerClose" class="push-banner-close" type="button" aria-label="Cerrar">✕</button>
+      </div>
+      <ul id="chatList" class="chat-list"></ul>
+      <p id="chatEmpty" class="tab-empty hidden">Todavía no tienes chats</p>
+      <button id="newChatBtn" class="fab" type="button" aria-label="Nuevo chat">+</button>
+    </section>
+    <section id="tabNews" class="tab-panel hidden">
+      <div class="status-scroll">
+        <div id="myStatus" class="status-row">
+          <div id="myStatusAvatar" class="status-ring"></div>
+          <div class="status-main">
+            <span class="status-name">Mi estado</span>
+            <span id="myStatusSub" class="status-sub">Toca para añadir un estado</span>
+          </div>
+        </div>
+        <div id="statusRecentTitle" class="info-tabs hidden"><span>Recientes</span></div>
+        <ul id="statusRecent" class="status-list"></ul>
+        <div id="statusSeenTitle" class="info-tabs hidden"><span>Vistos</span></div>
+        <ul id="statusSeen" class="status-list"></ul>
+        <p id="statusEmpty" class="status-empty hidden">Aquí aparecerán los estados de tus contactos. Añade contactos desde su perfil.</p>
+        <div id="sponsorSection" class="hidden">
+          <div class="section-head">
+            <div class="info-tabs"><span>Patrocinio de bots</span></div>
+            <button id="sponsorAdd" class="section-action hidden" type="button" aria-label="Añadir patrocinio">+</button>
+          </div>
+          <ul id="sponsorList" class="status-list"></ul>
+        </div>
+        <div id="channelSection">
+          <div class="section-head">
+            <div class="info-tabs"><span>Canales</span></div>
+            <button id="channelExplore" class="section-action" type="button">Explorar ➜</button>
+          </div>
+          <ul id="channelList" class="status-list"></ul>
+          <p id="channelEmpty" class="status-empty hidden">Aún no sigues ningún canal. Toca Explorar para encontrar canales o crea el tuyo.</p>
+          <button id="channelCreate" class="secondary-btn" type="button">✦ Crear canal</button>
+        </div>
+      </div>
+      <button id="statusFab" class="fab" type="button" aria-label="Nuevo estado"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8.5A2.5 2.5 0 0 1 6.5 6h1.2l1.3-2h6l1.3 2h1.2A2.5 2.5 0 0 1 20 8.5v8A2.5 2.5 0 0 1 17.5 19h-11A2.5 2.5 0 0 1 4 16.5z"/><circle cx="12" cy="12.5" r="3.4"/></svg></button>
+      <input id="statusInput" type="file" accept="image/jpeg,image/png,image/gif,image/webp,video/mp4,video/webm,video/quicktime" class="hidden">
+    </section>
+    <section id="tabGroups" class="tab-panel hidden">
+      <ul id="groupList" class="chat-list"></ul>
+      <p id="groupEmpty" class="tab-empty hidden">Todavía no tienes grupos</p>
+      <button id="newGroupFab" class="fab" type="button" aria-label="Nuevo grupo">+</button>
+    </section>
+    <section id="tabCalls" class="tab-panel hidden">
+      <div class="placeholder">
+        <div class="placeholder-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3.5h3.5l1.6 4.2-2.2 1.4a11 11 0 0 0 5 5l1.4-2.2 4.2 1.6V17a2.5 2.5 0 0 1-2.5 2.5A14.5 14.5 0 0 1 2.5 6 2.5 2.5 0 0 1 5 3.5z"/></svg></div>
+        <h2>Realiza llamadas privadas</h2>
+        <p>Mantente en contacto con llamadas y videollamadas seguras a cualquier dispositivo.</p>
+      </div>
+      <button id="callBtn" class="fab fab-wide" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3.5h3.5l1.6 4.2-2.2 1.4a11 11 0 0 0 5 5l1.4-2.2 4.2 1.6V17a2.5 2.5 0 0 1-2.5 2.5A14.5 14.5 0 0 1 2.5 6 2.5 2.5 0 0 1 5 3.5z"/></svg><span>Inicia una llamada</span></button>
+    </section>
+    <nav id="bottomNav" class="bottom-nav">
+      <button class="nav-item active" type="button" data-tab="chats"><span class="nav-pill"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="M7 9.5h10M7 14h6"/></svg><b id="navBadge" class="nav-badge hidden"></b></span><span class="nav-label">Chats</span></button>
+      <button class="nav-item" type="button" data-tab="news"><span class="nav-pill"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3.2"/><path d="M5.6 5.6a9 9 0 0 0 0 12.8M18.4 5.6a9 9 0 0 1 0 12.8M8.4 8.4a5 5 0 0 0 0 7.2M15.6 8.4a5 5 0 0 1 0 7.2"/></svg></span><span class="nav-label">Novedades</span></button>
+      <button class="nav-item" type="button" data-tab="groups"><span class="nav-pill"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="7.5" r="3"/><circle cx="5" cy="9.5" r="2.2"/><circle cx="19" cy="9.5" r="2.2"/><path d="M6.5 19v-1.5a4 4 0 0 1 4-4h3a4 4 0 0 1 4 4V19zM1.8 17.5a3 3 0 0 1 3-3M22.2 17.5a3 3 0 0 0-3-3"/></svg></span><span class="nav-label">Grupos</span></button>
+      <button class="nav-item" type="button" data-tab="calls"><span class="nav-pill"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3.5h3.5l1.6 4.2-2.2 1.4a11 11 0 0 0 5 5l1.4-2.2 4.2 1.6V17a2.5 2.5 0 0 1-2.5 2.5A14.5 14.5 0 0 1 2.5 6 2.5 2.5 0 0 1 5 3.5z"/></svg></span><span class="nav-label">Llamadas</span></button>
+    </nav>
+  </div>
+
+  <div id="chat" class="chat hidden">
+    <header class="topbar">
+      <button id="chatBack" class="info-back" type="button" aria-label="Volver">‹</button>
+      <button id="avatarBtn" class="avatar" type="button" aria-label="Cambiar foto del grupo"></button>
+      <input id="avatarInput" type="file" accept="image/*" class="hidden">
+      <div id="groupTitle" class="topbar-info clickable">
+        <strong id="chatName"></strong>
+        <span id="status"></span>
+      </div>
+      <button id="chatMenuBtn" class="menu-btn" type="button" aria-label="Más opciones" aria-haspopup="true">
+        <svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg>
+      </button>
+      <div id="chatMenu" class="pop-menu hidden" role="menu">
+        <button id="chatMenuFiles" class="pop-item pop-item-icon" type="button" role="menuitem">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 7.5A2.5 2.5 0 0 1 6 5h3.2l2 2.5H18A2.5 2.5 0 0 1 20.5 10v7.5A2.5 2.5 0 0 1 18 20H6a2.5 2.5 0 0 1-2.5-2.5z"/><circle cx="9.5" cy="12.5" r="1.3"/><path d="M6.5 18l3.6-3.4 2.4 2.2 2.4-2.6 2.6 3.8"/></svg>
+          <span id="chatMenuFilesLabel">Archivos del grupo</span>
+        </button>
+      </div>
+    </header>
+    <main id="messages" class="messages"></main>
+    <div id="aikoChips" class="aiko-chips hidden"></div>
+    <div id="replyBar" class="reply-bar hidden">
+      <div class="reply-info">
+        <strong id="replyAuthor"></strong>
+        <span id="replyText"></span>
+      </div>
+      <button id="replyCancel" class="reply-cancel" type="button" aria-label="Cancelar respuesta">✕</button>
+    </div>
+    <div id="mentionList" class="mention-list hidden" role="listbox"></div>
+    <form id="sendForm" class="composer">
+      <div class="composer-field">
+        <button id="emojiBtn" class="emoji-toggle" type="button" aria-label="Emojis">
+          <svg class="ic-smile" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9.5"/><path d="M8 14.2c1 1.5 2.4 2.3 4 2.3s3-.8 4-2.3"/><circle cx="9" cy="9.8" r="1" fill="currentColor" stroke="none"/><circle cx="15" cy="9.8" r="1" fill="currentColor" stroke="none"/></svg>
+          <svg class="ic-keyboard" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2.5"/><path d="M6 9h.01M10 9h.01M14 9h.01M18 9h.01M6 12.5h.01M10 12.5h.01M14 12.5h.01M18 12.5h.01M8 16h8" stroke-width="2.2"/></svg>
+        </button>
+        <input id="msgInput" type="text" maxlength="2000" placeholder="Escribe un mensaje" autocomplete="off">
+        <button id="attachBtn" class="composer-icon" type="button" aria-label="Adjuntar">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5l-8.6 8.6a5 5 0 0 1-7.1-7.1l8.9-8.9a3.3 3.3 0 0 1 4.7 4.7l-8.9 8.9a1.7 1.7 0 0 1-2.4-2.4l8.2-8.2"/></svg>
+        </button>
+        <button id="photoBtn" class="composer-icon" type="button" aria-label="Enviar imagen">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h3l1.5-2h7L17 8h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/><circle cx="12" cy="13" r="3.5"/></svg>
+        </button>
+        <input id="imageInput" type="file" accept="image/*" class="hidden">
+        <input id="audioInput" type="file" accept="audio/*,.mp3,.m4a,.aac,.ogg,.opus,.wav,.flac" class="hidden">
+        <input id="videoInput" type="file" accept="video/mp4,video/webm,video/quicktime,.mp4,.webm,.mov" class="hidden">
+        <input id="docInput" type="file" accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.json,.md,.rtf,.odt,.ods,.odp,.zip,.rar,.7z" class="hidden">
+      </div>
+      <div id="attachMenu" class="pop-menu attach-menu hidden" role="menu">
+        <button id="attachDoc" class="pop-item pop-item-icon" type="button" role="menuitem">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3.5" width="16" height="17" rx="2.5"/><path d="M8 9h8M8 12.5h8M8 16h5"/></svg>
+          <span>Documento</span>
+        </button>
+        <button id="attachVideo" class="pop-item pop-item-icon" type="button" role="menuitem">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="13.5" height="12" rx="2.5"/><path d="M16.5 10.5l4.5-2.6v8.2l-4.5-2.6z"/></svg>
+          <span>Video</span>
+        </button>
+        <button id="attachAudio" class="pop-item pop-item-icon" type="button" role="menuitem">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 17.5V6l10-2v11.5"/><circle cx="6.5" cy="17.5" r="2.5"/><circle cx="16.5" cy="15.5" r="2.5"/></svg>
+          <span>Música</span>
+        </button>
+      </div>
+      <button type="submit" aria-label="Enviar">➤</button>
+    </form>
+    <div id="emojiPanel" class="emoji-panel hidden">
+      <div class="ep-head">
+        <div id="epHeadMain" class="ep-head-main">
+          <button id="epSearchBtn" class="ep-icon" type="button" aria-label="Buscar emoji">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5L21 21"/></svg>
+          </button>
+          <div class="ep-tabs" role="tablist">
+            <button id="epTabEmoji" class="ep-tab active" type="button" role="tab" aria-label="Emojis">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9.5"/><path d="M8 14.2c1 1.5 2.4 2.3 4 2.3s3-.8 4-2.3"/><circle cx="9" cy="9.8" r="1" fill="currentColor" stroke="none"/><circle cx="15" cy="9.8" r="1" fill="currentColor" stroke="none"/></svg>
+            </button>
+            <button id="epTabSticker" class="ep-tab" type="button" role="tab" aria-label="Stickers">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 8A4.5 4.5 0 0 1 8 3.5h8A4.5 4.5 0 0 1 20.5 8v4.5L12.5 20.5H8A4.5 4.5 0 0 1 3.5 16z"/><path d="M20.5 12.5h-4a4 4 0 0 0-4 4v4"/></svg>
+            </button>
+          </div>
+          <button id="epBackspace" class="ep-icon" type="button" aria-label="Borrar">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 5H9l-6 7 6 7h12a1 1 0 0 0 1-1V6a1 1 0 0 0-1-1z"/><path d="M13 9.5l5 5M18 9.5l-5 5"/></svg>
+          </button>
+        </div>
+        <div id="epSearchRow" class="ep-search hidden">
+          <button id="epSearchBack" class="ep-icon" type="button" aria-label="Cerrar búsqueda">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 6l-6 6 6 6"/></svg>
+          </button>
+          <input id="epSearchInput" type="text" placeholder="Buscar emoji" autocomplete="off" autocapitalize="none" spellcheck="false">
+        </div>
+      </div>
+      <div id="epEmojiView" class="ep-view">
+        <div id="epScroll" class="ep-scroll"></div>
+        <nav id="epCats" class="ep-cats"></nav>
+      </div>
+      <div id="epStickerView" class="ep-view hidden">
+        <div class="ep-empty">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 8A4.5 4.5 0 0 1 8 3.5h8A4.5 4.5 0 0 1 20.5 8v4.5L12.5 20.5H8A4.5 4.5 0 0 1 3.5 16z"/><path d="M20.5 12.5h-4a4 4 0 0 0-4 4v4"/></svg>
+          <strong>Stickers</strong>
+          <span>Próximamente</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="groupInfo" class="info hidden">
+    <header class="info-top">
+      <button id="infoBack" class="info-back" type="button" aria-label="Volver">‹</button>
+      <strong>Info. del grupo</strong>
+    </header>
+    <div class="info-body">
+      <div class="info-hero">
+        <div id="infoAvatar" class="avatar big"></div>
+        <h2 id="infoName"></h2>
+        <p id="infoCount">0 miembros</p>
+        <p id="infoCreator" class="hidden"></p>
+      </div>
+      <div id="groupActions" class="info-actions hidden">
+        <button id="groupStatusPost" class="info-action hidden" type="button">
+          <span class="info-action-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5" stroke-dasharray="3.2 3.2"/><path d="M12 8.5v7M8.5 12h7"/></svg>
+          </span>
+          <span class="info-action-label">Estado</span>
+        </button>
+      </div>
+      <div id="groupStatusSheet" class="sheet hidden">
+        <div id="groupStatusScrim" class="sheet-scrim"></div>
+        <div class="sheet-panel" role="dialog" aria-label="Quién puede publicar estados">
+          <div class="sheet-handle"></div>
+          <strong class="sheet-title">Quién puede publicar estados</strong>
+          <button class="sheet-option" type="button" data-mode="off"><span class="sheet-radio"></span><span>Nadie</span></button>
+          <button class="sheet-option" type="button" data-mode="admins"><span class="sheet-radio"></span><span>Solo admins</span></button>
+          <button class="sheet-option" type="button" data-mode="all"><span class="sheet-radio"></span><span>Todos los miembros</span></button>
+        </div>
+      </div>
+      <div id="memberSheet" class="sheet hidden">
+        <div id="memberSheetScrim" class="sheet-scrim"></div>
+        <div class="sheet-panel" role="dialog" aria-label="Opciones del miembro">
+          <div class="sheet-handle"></div>
+          <div class="sheet-person">
+            <div id="memberSheetAvatar" class="sheet-person-avatar"></div>
+            <strong id="memberSheetName" class="sheet-title"></strong>
+          </div>
+          <div id="memberSheetOptions"></div>
+        </div>
+      </div>
+      <div class="info-tabs"><span>Miembros</span></div>
+      <div id="memberBar" class="member-bar">
+        <span id="memberBarCount"></span>
+        <button id="memberSearchBtn" class="member-bar-btn" type="button" aria-label="Buscar miembro">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5L21 21"/></svg>
+        </button>
+      </div>
+      <div id="memberSearchRow" class="member-search hidden">
+        <button id="memberSearchBack" class="member-bar-btn" type="button" aria-label="Cerrar búsqueda">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 6l-6 6 6 6"/></svg>
+        </button>
+        <input id="memberSearchInput" type="text" maxlength="20" placeholder="Buscar miembro" autocomplete="off" autocapitalize="none" spellcheck="false">
+      </div>
+      <ul id="memberList" class="member-list"></ul>
+      <p id="memberEmpty" class="empty hidden">Sin resultados</p>
+      <button id="memberMore" class="member-more hidden" type="button"></button>
+      <div id="groupSettings" class="group-settings hidden">
+        <div class="info-section">Ajustes</div>
+        <button id="groupStatusRow" class="setting-item" type="button">
+          <span class="setting-item-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5" stroke-dasharray="3.2 3.2"/><circle cx="12" cy="12" r="2.6"/></svg>
+          </span>
+          <span class="setting-item-text">
+            <span class="setting-item-title">Estados del grupo</span>
+            <span id="groupStatusValue" class="setting-item-sub">Nadie</span>
+          </span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <div id="devices" class="info hidden">
+    <header class="info-top">
+      <button id="devicesBack" class="info-back" type="button" aria-label="Volver">‹</button>
+      <strong>Dispositivos vinculados</strong>
+    </header>
+    <div class="info-body">
+      <p class="devices-hint">Aquí ves dónde tienes tu cuenta abierta. Si no reconoces un dispositivo, cierra su sesión.</p>
+      <button id="deviceLinkBtn" class="primary-btn" type="button">Vincular un dispositivo</button>
+      <div class="info-section">Este dispositivo</div>
+      <ul id="deviceCurrent" class="device-list"></ul>
+      <div id="deviceOthersTitle" class="info-section hidden">Otros dispositivos</div>
+      <ul id="deviceOthers" class="device-list"></ul>
+      <p id="deviceEmpty" class="status-empty hidden">No hay otros dispositivos con tu sesión abierta.</p>
+      <button id="deviceLogoutAll" class="logout-btn hidden" type="button">Cerrar sesión en los demás dispositivos</button>
+    </div>
+  </div>
+
+  <div id="linkScreen" class="info hidden">
+    <header class="info-top">
+      <button id="linkBack" class="info-back" type="button" aria-label="Volver">‹</button>
+      <strong>Vincular un dispositivo</strong>
+    </header>
+    <div class="info-body">
+      <p class="devices-hint">Escribe el código que muestra tu bot o dispositivo, o escanea su código QR.</p>
+      <form id="linkForm" class="link-form">
+        <input id="linkCode" type="text" maxlength="9" placeholder="XXXX-XXXX" autocomplete="off" autocapitalize="characters" spellcheck="false">
+        <button id="linkContinue" class="primary-btn" type="submit">Continuar</button>
+      </form>
+      <button id="linkScanBtn" class="secondary-btn" type="button">Escanear código QR</button>
+      <div id="linkScan" class="link-scan hidden">
+        <video id="linkVideo" playsinline muted></video>
+        <p>Apunta al código QR del bot</p>
+      </div>
+      <div id="linkConfirm" class="link-confirm hidden">
+        <strong id="linkName"></strong>
+        <p>Este bot podrá leer y enviar mensajes desde tu cuenta. Vincúlalo solo si tú iniciaste esta vinculación.</p>
+        <button id="linkApprove" class="primary-btn" type="button">Vincular</button>
+        <button id="linkCancel" class="secondary-btn" type="button">Cancelar</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="profile" class="info hidden">
+    <header class="info-top">
+      <button id="profileBack" class="info-back" type="button" aria-label="Volver">‹</button>
+      <strong>Perfil</strong>
+    </header>
+    <div class="info-body">
+      <div class="info-hero">
+        <div id="profileBanner" class="hero-banner"></div>
+        <button id="profileAvatar" class="avatar big" type="button" aria-label="Cambiar foto"></button>
+        <h2 id="profileName"></h2>
+        <p>Toca la foto para cambiarla. Puedes usar una imagen o un GIF de hasta 10 MB.</p>
+      </div>
+      <input id="profileInput" type="file" accept="image/*" class="hidden">
+      <input id="bannerInput" type="file" accept="image/*" class="hidden">
+      <button id="changePhotoBtn" class="primary-btn" type="button">Cambiar foto</button>
+      <button id="removePhotoBtn" class="secondary-btn hidden" type="button">Quitar foto</button>
+      <button id="changeBannerBtn" class="secondary-btn" type="button">Cambiar banner</button>
+      <button id="removeBannerBtn" class="secondary-btn hidden" type="button">Quitar banner</button>
+      <p id="pushText" class="push-text"></p>
+      <button id="pushBtn" class="secondary-btn hidden" type="button"></button>
+      <div id="adminSection" class="admin-section hidden">
+        <button id="adminToggleBtn" class="secondary-btn" type="button">Administrar usuarios</button>
+        <ul id="adminList" class="member-list hidden"></ul>
+      </div>
+      <button id="logoutBtn" class="logout-btn" type="button">Cerrar sesión</button>
+      <button id="deleteAccountBtn" class="logout-btn" type="button">Eliminar cuenta</button>
+      <form id="deleteAccountForm" class="delete-form hidden">
+        <p>Se borrarán tu perfil, tus estados y tus chats privados. Esta acción no se puede deshacer. Escribe tu contraseña para confirmar.</p>
+        <input id="deletePasswordInput" type="password" maxlength="100" placeholder="Contraseña" autocomplete="current-password">
+        <p id="deleteError" class="login-error hidden"></p>
+        <button id="deleteConfirmBtn" class="danger-btn" type="submit">Eliminar mi cuenta definitivamente</button>
+        <button id="deleteCancelBtn" class="secondary-btn" type="button">Cancelar</button>
+      </form>
+    </div>
+  </div>
+
+  <div id="statusNew" class="info hidden">
+    <header class="info-top">
+      <button id="statusNewBack" class="info-back" type="button" aria-label="Volver">‹</button>
+      <strong>Nuevo estado</strong>
+    </header>
+    <div id="statusPreview" class="status-preview"></div>
+    <div id="statusProgress" class="status-progress hidden">
+      <div class="status-progress-track"><div id="statusProgressBar"></div></div>
+      <span id="statusProgressText"></span>
+    </div>
+    <form id="statusForm" class="status-compose">
+      <input id="statusCaption" type="text" maxlength="200" placeholder="Añade un texto" autocomplete="off">
+      <button id="statusPublish" type="submit" aria-label="Publicar">➤</button>
+    </form>
+  </div>
+
+  <div id="statusView" class="status-view hidden">
+    <div id="svBars" class="sv-bars"></div>
+    <header class="sv-head">
+      <button id="svClose" class="info-back" type="button" aria-label="Cerrar">‹</button>
+      <div id="svAvatar" class="avatar"></div>
+      <div class="sv-who">
+        <strong id="svName"></strong>
+        <span id="svTime"></span>
+      </div>
+      <button id="svDelete" class="sv-delete hidden" type="button" aria-label="Eliminar estado"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/></svg></button>
+    </header>
+    <div id="svStage" class="sv-stage"></div>
+    <div id="svTapPrev" class="sv-tap prev"></div>
+    <div id="svTapNext" class="sv-tap next"></div>
+    <p id="svCaption" class="sv-caption hidden"></p>
+    <button id="svViews" class="sv-views hidden" type="button"></button>
+    <div id="svViewers" class="sv-viewers hidden">
+      <div class="sv-viewers-head"><strong id="svViewersTitle"></strong><button id="svViewersClose" type="button" aria-label="Cerrar">✕</button></div>
+      <ul id="svViewersList" class="member-list"></ul>
+    </div>
+  </div>
+
+  <div id="userProfile" class="info hidden">
+    <header class="info-top">
+      <button id="userBack" class="info-back" type="button" aria-label="Volver">‹</button>
+      <strong>Perfil</strong>
+    </header>
+    <div class="info-body">
+      <div class="info-hero">
+        <div id="userBanner" class="hero-banner"></div>
+        <div id="userAvatar" class="avatar big"></div>
+        <h2 id="userName"></h2>
+        <p id="userState"></p>
+      </div>
+      <button id="addContactBtn" class="primary-btn hidden" type="button">Añadir</button>
+      <button id="messageBtn" class="secondary-btn" type="button">Enviar mensaje</button>
+      <button id="removeContactBtn" class="secondary-btn hidden" type="button">Eliminar de contactos</button>
+      <button id="reportBtn" class="secondary-btn report-btn hidden" type="button">Reportar</button>
+      <div id="aikoAdmin" class="admin-section hidden">
+        <input id="aikoAvatarInput" type="file" accept="image/*" class="hidden">
+        <input id="aikoBannerInput" type="file" accept="image/*" class="hidden">
+        <button id="aikoAvatarBtn" class="secondary-btn" type="button">Cambiar foto de Aiko</button>
+        <button id="aikoAvatarRemoveBtn" class="secondary-btn hidden" type="button">Quitar foto de Aiko</button>
+        <button id="aikoBannerBtn" class="secondary-btn" type="button">Cambiar banner de Aiko</button>
+        <button id="aikoBannerRemoveBtn" class="secondary-btn hidden" type="button">Quitar banner de Aiko</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="newChat" class="info hidden">
+    <header class="info-top">
+      <button id="newBack" class="info-back" type="button" aria-label="Volver">‹</button>
+      <strong>Nuevo chat</strong>
+    </header>
+    <div class="info-body">
+      <button id="newGroupRow" class="action-row" type="button">
+        <span class="action-icon">👥</span>
+        <span>Nuevo grupo</span>
+      </button>
+      <div class="info-tabs"><span>Contactos</span></div>
+      <ul id="userList" class="member-list"></ul>
+      <p id="userEmpty" class="empty hidden">Aún no tienes contactos. Toca a un usuario en un chat y pulsa Añadir</p>
+    </div>
+  </div>
+
+  <div id="newGroup" class="info hidden">
+    <header class="info-top">
+      <button id="groupBack" class="info-back" type="button" aria-label="Volver">‹</button>
+      <strong>Nuevo grupo</strong>
+    </header>
+    <div class="info-body">
+      <div class="group-form">
+        <input id="groupNameInput" type="text" maxlength="30" placeholder="Nombre del grupo" autocomplete="off">
+      </div>
+      <div class="info-tabs"><span>Miembros</span></div>
+      <ul id="pickList" class="member-list"></ul>
+      <button id="createGroupBtn" class="primary-btn" type="button" disabled>Crear grupo</button>
+    </div>
+  </div>
+
+  <div id="chatFiles" class="info hidden">
+    <header class="info-top">
+      <button id="filesBack" class="info-back" type="button" aria-label="Volver">‹</button>
+      <strong id="filesTitle">Todos los archivos</strong>
+    </header>
+    <div id="filesChips" class="files-chips" role="tablist">
+      <button class="files-chip" type="button" data-kind="photos" role="tab">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="4.5" width="17" height="15" rx="2.5"/><circle cx="9" cy="10" r="1.6"/><path d="M4 17.5l4.6-4.4 3.4 3.2 3-3 5 4.6"/></svg>
+        <span>Fotos</span>
+      </button>
+      <button class="files-chip" type="button" data-kind="videos" role="tab">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="13.5" height="12" rx="2.5"/><path d="M16.5 10.5l4.5-2.6v8.2l-4.5-2.6z"/></svg>
+        <span>Videos</span>
+      </button>
+      <button class="files-chip" type="button" data-kind="docs" role="tab">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3.5" width="16" height="17" rx="2.5"/><path d="M8 9h8M8 12.5h8M8 16h5"/></svg>
+        <span>Documentos</span>
+      </button>
+      <button class="files-chip" type="button" data-kind="music" role="tab">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 17.5V6l10-2v11.5"/><circle cx="6.5" cy="17.5" r="2.5"/><circle cx="16.5" cy="15.5" r="2.5"/></svg>
+        <span>Música</span>
+      </button>
+      <button class="files-chip" type="button" data-kind="links" role="tab">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3A4 4 0 0 0 11 18.7l1-1"/></svg>
+        <span>Enlaces</span>
+      </button>
+      <button class="files-chip" type="button" data-kind="stickers" role="tab">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 8A4.5 4.5 0 0 1 8 3.5h8A4.5 4.5 0 0 1 20.5 8v4.5L12.5 20.5H8A4.5 4.5 0 0 1 3.5 16z"/><path d="M20.5 12.5h-4a4 4 0 0 0-4 4v4"/></svg>
+        <span>Stickers</span>
+      </button>
+    </div>
+    <div id="filesBody" class="info-body files-body">
+      <div id="filesHeading" class="files-heading">RECIENTES</div>
+      <div id="filesGrid" class="files-grid"></div>
+      <div id="filesList" class="files-list"></div>
+      <p id="filesEmpty" class="status-empty hidden"></p>
+    </div>
+  </div>
+
+  <div id="channelsExplore" class="info hidden">
+    <header class="info-top">
+      <button id="exploreBack" class="info-back" type="button" aria-label="Volver">‹</button>
+      <strong>Explorar canales</strong>
+    </header>
+    <div class="info-body">
+      <ul id="exploreList" class="status-list"></ul>
+      <p id="exploreEmpty" class="status-empty hidden">Todavía no hay canales para explorar.</p>
+    </div>
+  </div>
+
+  <div id="channelNew" class="info hidden">
+    <header class="info-top">
+      <button id="channelNewBack" class="info-back" type="button" aria-label="Volver">‹</button>
+      <strong>Nuevo canal</strong>
+    </header>
+    <div class="info-body">
+      <div class="group-form">
+        <input id="channelNameInput" type="text" maxlength="30" placeholder="Nombre del canal" autocomplete="off">
+      </div>
+      <div class="group-form">
+        <input id="channelDescInput" type="text" maxlength="150" placeholder="Descripción (opcional)" autocomplete="off">
+      </div>
+      <p class="status-empty">Solo tú podrás publicar en el canal. Los demás podrán seguirlo y leer tus publicaciones.</p>
+      <button id="channelNewBtn" class="primary-btn" type="button" disabled>Crear canal</button>
+    </div>
+  </div>
+
+  <div id="channelView" class="info hidden">
+    <header class="info-top">
+      <button id="channelBack" class="info-back" type="button" aria-label="Volver">‹</button>
+      <div id="channelHeadAvatar" class="ch-avatar sm"></div>
+      <div class="ch-head-text">
+        <strong id="channelHeadName"></strong>
+        <span id="channelHeadSub"></span>
+      </div>
+      <button id="channelFollowBtn" class="ch-follow hidden" type="button">Seguir</button>
+      <button id="channelDeleteBtn" class="ch-delete hidden" type="button" aria-label="Eliminar canal">✕</button>
+    </header>
+    <div id="channelBody" class="info-body ch-body">
+      <p id="channelDesc" class="ch-desc hidden"></p>
+      <div id="channelPosts" class="ch-posts"></div>
+      <p id="channelPostsEmpty" class="status-empty hidden">Este canal todavía no tiene publicaciones.</p>
+    </div>
+    <form id="channelPostForm" class="status-compose hidden">
+      <input id="channelPostInput" type="text" maxlength="2000" placeholder="Escribe una publicación" autocomplete="off">
+      <button id="channelPostBtn" type="submit" aria-label="Publicar">➤</button>
+    </form>
+  </div>
+
+  <div id="sponsorNew" class="info hidden">
+    <header class="info-top">
+      <button id="sponsorNewBack" class="info-back" type="button" aria-label="Volver">‹</button>
+      <strong>Nuevo patrocinio</strong>
+    </header>
+    <div class="info-body">
+      <div class="group-form">
+        <input id="sponsorNameInput" type="text" maxlength="40" placeholder="Nombre del bot" autocomplete="off">
+      </div>
+      <div class="group-form">
+        <input id="sponsorDescInput" type="text" maxlength="120" placeholder="Descripción corta" autocomplete="off">
+      </div>
+      <div class="group-form">
+        <input id="sponsorUrlInput" type="url" maxlength="500" placeholder="Enlace (https://...)" autocomplete="off">
+      </div>
+      <button id="sponsorNewBtn" class="primary-btn" type="button" disabled>Añadir patrocinio</button>
+    </div>
+  </div>
+
+  <div id="imagePreview" class="img-overlay hidden">
+    <header class="img-top">
+      <button id="imagePreviewClose" class="info-back" type="button" aria-label="Cerrar">✕</button>
+    </header>
+    <div class="img-stage"><img id="imagePreviewImg" alt=""></div>
+    <form id="imageForm" class="img-caption">
+      <input id="imageCaption" type="text" maxlength="1000" placeholder="Añade un pie de foto" autocomplete="off">
+      <button id="imageSendBtn" type="submit" aria-label="Enviar">➤</button>
+    </form>
+  </div>
+
+  <div id="reportOverlay" class="img-overlay hidden">
+    <header class="img-top">
+      <button id="reportClose" class="info-back" type="button" aria-label="Cerrar">✕</button>
+      <strong id="reportTitle">Reportar</strong>
+    </header>
+    <form id="reportForm" class="report-form">
+      <p>Cuéntanos qué pasó. Aiko enviará tu reporte al creador de Zentry.</p>
+      <textarea id="reportText" maxlength="1000" rows="6" placeholder="Describe el problema"></textarea>
+      <input id="reportInput" type="file" accept="image/*" class="hidden">
+      <div id="reportShot" class="report-shot hidden">
+        <img id="reportShotImg" alt="">
+        <button id="reportShotRemove" type="button" aria-label="Quitar captura">✕</button>
+      </div>
+      <button id="reportAttachBtn" class="secondary-btn" type="button">Adjuntar captura</button>
+      <button id="reportSendBtn" class="primary-btn" type="submit" disabled>Enviar reporte</button>
+    </form>
+  </div>
+
+  <div id="imageViewer" class="img-overlay hidden">
+    <header class="img-top">
+      <button id="imageViewerClose" class="info-back" type="button" aria-label="Cerrar">✕</button>
+      <span id="imageViewerInfo" class="img-info"></span>
+    </header>
+    <div class="img-stage"><img id="imageViewerImg" alt=""></div>
+    <p id="imageViewerCaption" class="img-viewer-caption hidden"></p>
+  </div>
+
+  <div id="videoViewer" class="img-overlay hidden">
+    <header class="img-top">
+      <button id="videoViewerClose" class="info-back" type="button" aria-label="Cerrar">✕</button>
+      <span id="videoViewerInfo" class="img-info"></span>
+    </header>
+    <div class="img-stage"><video id="videoViewerPlayer" controls playsinline></video></div>
+  </div>
+
+  <div id="toast" class="toast hidden"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>
