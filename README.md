@@ -1,9 +1,7 @@
-```
-termux-chroot
-```
-```
-cd Zentry
-```
-```
-npm start
-```
+``
+cd ~/Zentry
+git pull
+``
+``
+TLS_CERT=cert.pem TLS_KEY=key.pem npm start
+``
